@@ -1,0 +1,28 @@
+[build]
+  command = ""
+  publish = "."
+  functions = "netlify/functions"
+
+[functions]
+  node_bundler = "esbuild"
+
+[functions."persona-turn"]
+  timeout = 26
+
+[functions."score-starter"]
+  timeout = 26
+
+[functions."score-background"]
+  timeout = 900
+
+[functions."transcribe"]
+  timeout = 26
+
+[functions."transcribe-background"]
+  timeout = 900
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Access-Control-Allow-Origin = "*"
+    Content-Security-Policy = "default-src *; script-src 'self' 'unsafe-inline' 'unsafe-eval' cdn.jsdelivr.net cdnjs.cloudflare.com fonts.googleapis.com; style-src 'self' 'unsafe-inline' fonts.googleapis.com fonts.gstatic.com; font-src fonts.gstatic.com fonts.googleapis.com data:; media-src * blob: data:; connect-src *; img-src * data: blob:; frame-ancestors 'none'"
