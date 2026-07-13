@@ -18,6 +18,15 @@
 [functions."transcribe"]
   timeout = 26
 
+[functions."transcribe-live"]
+  timeout = 26
+
+[functions."tts"]
+  timeout = 26
+
+[functions."realtime-session"]
+  timeout = 26
+
 [functions."transcribe-background"]
   timeout = 900
 
