@@ -192,10 +192,14 @@
 
   /* Manager dashboard */
   .login-wrap { max-width: 360px; margin: 100px auto; text-align: center; }
-  table.progress-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  table.progress-table th { text-align: left; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .5px; padding: 10px 12px; border-bottom: 1px solid var(--border); }
-  table.progress-table td { padding: 12px; border-bottom: 1px solid var(--border); }
-  table.progress-table tr:hover { background: var(--surface2); cursor: pointer; }
+  .rep-row { display: flex; align-items: center; gap: 16px; padding: 16px 18px; border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 10px; cursor: pointer; transition: all .15s; }
+  .rep-row:hover { border-color: var(--accent); background: rgba(108,99,255,.05); }
+  .rep-row-name { font-weight: 700; font-size: 14px; }
+  .rep-row-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .rep-row-stats { margin-left: auto; text-align: right; }
+  .rep-row-pct { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 18px; }
+  .rep-row-tier { font-size: 11px; color: var(--muted); }
+  .attempt-history-item { border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 12px; }
   .status-chip { font-size: 11px; padding: 3px 10px; border-radius: 20px; font-weight: 700; text-transform: uppercase; }
   .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.7); z-index: 1000; align-items: center; justify-content: center; padding: 20px; }
   .modal-box { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 28px; max-width: 640px; width: 100%; max-height: 85vh; overflow-y: auto; }
@@ -456,17 +460,6 @@
           <button class="btn btn-primary" style="margin-top:8px" onclick="submitResult()" id="result-submit-btn">Result</button>
         </div>
       </div>
-
-      <!-- Shared: notes photo (applies to either path) -->
-      <div style="margin-top:24px;padding-top:20px;border-top:1px solid var(--border)">
-        <label>Photo of the notes you took during the call (optional)</label>
-        <div class="upload-zone" id="photo-upload-zone" onclick="document.getElementById('notes-photo-input').click()">
-          <div class="upload-icon">📷</div>
-          <div class="upload-text" id="photo-upload-text">Tap to take a photo or choose an image</div>
-        </div>
-        <input type="file" id="notes-photo-input" accept="image/*" capture="environment" style="display:none" onchange="handlePhotoSelect(event)">
-        <img id="notes-preview-img" class="notes-preview" style="display:none">
-      </div>
     </div>
 
     <!-- Step: disposition capture (legacy, superseded by planner-card above) -->
@@ -492,21 +485,50 @@
         <div class="error-box" id="login-error" style="display:none">Incorrect password.</div>
       </div>
     </div>
-    <div id="manager-dashboard" style="display:none">
+
+    <!-- Rep list -->
+    <div id="manager-rep-list" style="display:none">
       <div class="card">
-        <div class="card-title">New Hire Progress</div>
-        <table class="progress-table" id="progress-table">
-          <thead><tr><th>Rep</th><th>Team</th><th>Current Module</th><th>Status</th><th>Attempts</th><th>Best Score</th><th>Last Attempt</th></tr></thead>
-          <tbody id="progress-tbody"></tbody>
-        </table>
+        <div class="card-title">New Hires</div>
+        <p class="muted-small" style="margin-bottom:14px">Click a rep to see their full path, what's next, and where they're struggling.</p>
+        <div id="rep-list-body"></div>
+      </div>
+    </div>
+
+    <!-- Rep profile -->
+    <div id="manager-rep-profile" style="display:none">
+      <button class="btn btn-ghost" style="width:auto;margin-bottom:16px" onclick="backToRepList()">← All Reps</button>
+
+      <div class="card">
+        <div class="readiness-header">
+          <div>
+            <div class="readiness-name" id="profile-rep-name"></div>
+            <div class="readiness-sub" id="profile-rep-sub"></div>
+          </div>
+        </div>
+        <div class="card-title">Path to Graduate</div>
+        <div class="readiness-grid" id="profile-readiness-grid"></div>
+        <div class="recommend-card" id="profile-recommend-card" style="cursor:default">
+          <div>
+            <div class="recommend-title" id="profile-recommend-title"></div>
+            <div class="recommend-sub" id="profile-recommend-sub"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Strengths &amp; Growth Areas</div>
+        <div class="skill-chip-row" id="profile-skill-chips"></div>
+        <div id="profile-growth-note" style="margin-top:14px"></div>
+        <div id="profile-coaching-notes" style="margin-top:18px"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Attempt History</div>
+        <div id="profile-attempt-history"></div>
       </div>
     </div>
   </div>
-</div>
-
-<!-- Attempt detail modal -->
-<div class="modal-overlay" id="attempt-modal">
-  <div class="modal-box" id="attempt-modal-body"></div>
 </div>
 
 <script>
@@ -584,7 +606,7 @@ function showPage(page, btn) {
   document.getElementById('page-' + page).classList.add('active');
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   if (btn) btn.classList.add('active');
-  if (page === 'manager' && document.getElementById('manager-dashboard').style.display !== 'none') renderDashboard();
+  if (page === 'manager' && document.getElementById('manager-rep-list').style.display !== 'none') renderDashboard();
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -1002,8 +1024,6 @@ function setupPlanner() {
   document.getElementById('apt-phone-verified').checked = false;
   document.querySelectorAll('input[name="apt-attendee"]').forEach(r => r.checked = false);
   document.getElementById('result-notes').value = '';
-  document.getElementById('notes-preview-img').style.display = 'none';
-  document.getElementById('notes-photo-input').value = '';
   document.getElementById('apt-error').style.display = 'none';
   document.getElementById('result-error').style.display = 'none';
   selectedResultValue = null;
@@ -1070,31 +1090,10 @@ function slugify(s) {
 }
 
 // ═══════════════════════════════════════════════════════════
-// PLANNER: shared photo upload + transcript + scoring submission
+// PLANNER: shared transcript + scoring submission
 // ═══════════════════════════════════════════════════════════
-function handlePhotoSelect(event) {
-  const file = event.target.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = e => {
-    document.getElementById('notes-preview-img').src = e.target.result;
-    document.getElementById('notes-preview-img').style.display = 'block';
-  };
-  reader.readAsDataURL(file);
-}
-
 function buildTranscriptText() {
   return conversationHistory.map(t => `${t.speaker === 'rep' ? 'REP' : activeModule.persona_name.toUpperCase()}: ${t.text}`).join('\n');
-}
-
-async function uploadNotesPhoto() {
-  const fileInput = document.getElementById('notes-photo-input');
-  const file = fileInput.files[0];
-  if (!file) return null;
-  const path = `${repTeam}/${repId.replace(/\s/g,'_')}_${Date.now()}_${file.name}`;
-  const upRes = await sb.storage.from('training-notes-photos').upload(path, file, { contentType: file.type });
-  if (upRes.error) throw new Error('Photo upload failed: ' + upRes.error.message);
-  return sb.storage.from('training-notes-photos').getPublicUrl(path).data?.publicUrl || null;
 }
 
 async function submitAppointment() {
@@ -1154,13 +1153,10 @@ async function submitToScoring(dispositionReported, dispositionNotesText, dispos
   submitBtn.disabled = true;
   document.getElementById('planner-card').style.display = 'none';
   document.getElementById('progress-wrap').style.display = 'block';
-  setProgress(15, 'Uploading your notes photo...');
+  setProgress(15, 'Starting scoring job...');
 
   try {
-    let notesPhotoUrl = null;
-    if (document.getElementById('notes-photo-input').files[0]) {
-      notesPhotoUrl = await uploadNotesPhoto();
-    }
+    const notesPhotoUrl = null; // photo capture removed — disposition form + notes already cover this
 
     setProgress(40, 'Starting scoring job...');
     const transcript = buildTranscriptText();
@@ -1312,68 +1308,249 @@ function managerLogin() {
   const pwd = document.getElementById('manager-pwd').value;
   if (pwd === MANAGER_PASSWORD) {
     document.getElementById('manager-login-wrap').style.display = 'none';
-    document.getElementById('manager-dashboard').style.display = 'block';
+    document.getElementById('manager-rep-list').style.display = 'block';
     renderDashboard();
   } else {
     document.getElementById('login-error').style.display = 'block';
   }
 }
 
-let allProgressRows = [];
 let allModulesById = {};
+let allModulesList = [];
 
 async function renderDashboard() {
-  const { data: modData } = await sb.from('training_modules').select('*').order('order_index');
+  document.getElementById('manager-rep-profile').style.display = 'none';
+  document.getElementById('manager-rep-list').style.display = 'block';
+
+  const { data: modData } = await sb.from('training_modules').select('*').eq('is_active', true).order('order_index');
+  allModulesList = modData || [];
   allModulesById = {};
-  (modData || []).forEach(m => allModulesById[m.id] = m);
+  allModulesList.forEach(m => allModulesById[m.id] = m);
 
-  const { data: progData, error } = await sb.from('trainee_progress').select('*').order('updated_at', { ascending: false });
-  if (error) { document.getElementById('progress-tbody').innerHTML = `<tr><td colspan="7">Could not load: ${error.message}</td></tr>`; return; }
-  allProgressRows = progData || [];
+  const { data: progData, error } = await sb.from('trainee_progress').select('*');
+  const body = document.getElementById('rep-list-body');
+  if (error) { body.innerHTML = `<p class="muted-small">Could not load: ${error.message}</p>`; return; }
 
-  document.getElementById('progress-tbody').innerHTML = allProgressRows.map(p => {
-    const mod = allModulesById[p.module_id];
-    const statusColor = p.status === 'passed' ? 'var(--green)' : (p.status === 'in_progress' ? 'var(--amber)' : 'var(--muted2)');
+  // Group progress rows by rep
+  const byRep = {};
+  (progData || []).forEach(p => {
+    const key = p.rep_id;
+    if (!byRep[key]) byRep[key] = { repId: p.rep_id, team: p.team, rows: [], lastActivity: null };
+    byRep[key].rows.push(p);
+    byRep[key].team = byRep[key].team || p.team;
+    if (p.last_attempt_at && (!byRep[key].lastActivity || p.last_attempt_at > byRep[key].lastActivity)) {
+      byRep[key].lastActivity = p.last_attempt_at;
+    }
+  });
+
+  const reps = Object.values(byRep);
+  if (!reps.length) { body.innerHTML = '<p class="muted-small">No reps have started practicing yet.</p>'; return; }
+
+  body.innerHTML = reps.map(r => {
+    const passedCount = r.rows.filter(row => row.status === 'passed').length;
+    const totalCount = allModulesList.length || 1;
+    const pct = Math.round((passedCount / totalCount) * 100);
+    let currentTier = 1;
+    r.rows.forEach(row => {
+      if (row.status !== 'locked') {
+        const mod = allModulesById[row.module_id];
+        if (mod) currentTier = Math.max(currentTier, mod.tier);
+      }
+    });
     return `
-      <tr onclick="openRepAttempts('${p.rep_id}')">
-        <td>${p.rep_id}</td>
-        <td>${p.team || ''}</td>
-        <td>${mod ? mod.title : ''}</td>
-        <td><span class="status-chip" style="background:${statusColor}22;color:${statusColor}">${p.status}</span></td>
-        <td>${p.attempts}</td>
-        <td>${p.best_score != null ? Number(p.best_score).toFixed(1) : '—'}</td>
-        <td>${p.last_attempt_at ? new Date(p.last_attempt_at).toLocaleDateString() : '—'}</td>
-      </tr>`;
+      <div class="rep-row" onclick="openRepProfile('${r.repId.replace(/'/g,"\\'")}')">
+        <div>
+          <div class="rep-row-name">${escapeHtml(r.repId)}</div>
+          <div class="rep-row-sub">${escapeHtml(r.team || '')} · last activity ${r.lastActivity ? new Date(r.lastActivity).toLocaleDateString() : '—'}</div>
+        </div>
+        <div class="rep-row-stats">
+          <div class="rep-row-pct" style="color:${pct === 100 ? 'var(--green)' : 'var(--accent)'}">${pct === 100 ? '🎓' : pct + '%'}</div>
+          <div class="rep-row-tier">Tier ${currentTier} of ${Math.max(...allModulesList.map(m => m.tier), 1)}</div>
+        </div>
+      </div>`;
   }).join('');
 }
 
-async function openRepAttempts(rep) {
-  const { data: attempts, error } = await sb.from('training_attempts').select('*').eq('rep_id', rep).order('created_at', { ascending: false }).limit(30);
-  const modal = document.getElementById('attempt-modal');
-  const body = document.getElementById('attempt-modal-body');
-  if (error) { body.innerHTML = `<p>Could not load attempts: ${error.message}</p><button class="btn btn-ghost" onclick="closeAttemptModal()">Close</button>`; modal.style.display = 'flex'; return; }
+function backToRepList() {
+  document.getElementById('manager-rep-profile').style.display = 'none';
+  document.getElementById('manager-rep-list').style.display = 'block';
+}
 
-  body.innerHTML = `
-    <div class="card-title">${rep} — Attempt History</div>
-    ${(attempts || []).map(a => {
-      const mod = allModulesById[a.module_id];
-      return `
-      <div class="card" style="margin-bottom:12px;padding:16px">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-          <strong style="font-size:13px">${mod ? mod.title : ''}</strong>
-          <span class="status-chip" style="background:${a.passed ? 'var(--green)22' : 'var(--red)22'};color:${a.passed ? 'var(--green)' : 'var(--red)'}">${a.overall_score != null ? Number(a.overall_score).toFixed(1) : '—'}</span>
-        </div>
-        <p class="muted-small">${new Date(a.created_at).toLocaleString()} · Disposition: ${a.disposition_reported || '—'} ${a.disposition_match_score != null ? `· Match ${a.disposition_match_score}/10` : ''}</p>
-        ${a.lead_source ? `<p class="muted-small">Lead source: ${LEAD_SOURCES[a.lead_source]?.label || a.lead_source} · Calling from: ${a.fh_name || '—'} · AFP referenced: ${a.afp_name || '—'}</p>` : ''}
-        ${a.disposition_feedback ? `<p style="font-size:12px;color:var(--muted2);margin-top:6px">${a.disposition_feedback}</p>` : ''}
-        ${renderPlannerDetail(a.disposition_form_json)}
-        ${a.notes_photo_url ? `<img src="${a.notes_photo_url}" style="max-width:100%;max-height:160px;border-radius:8px;margin-top:8px;border:1px solid var(--border)">` : ''}
-        <details style="margin-top:8px"><summary style="cursor:pointer;font-size:12px;color:var(--muted2)">Transcript</summary><pre style="white-space:pre-wrap;font-size:12px;color:var(--muted2);margin-top:8px">${escapeHtml(a.transcript || '')}</pre></details>
-      </div>`;
-    }).join('') || '<p class="muted-small">No attempts yet.</p>'}
-    <button class="btn btn-ghost" onclick="closeAttemptModal()">Close</button>
-  `;
-  modal.style.display = 'flex';
+// Groups modules by category_label for the readiness grid, same shape as the practice-side version.
+function groupModulesForProfile() {
+  const byCategory = {};
+  allModulesList.forEach(m => (byCategory[m.category_label] = byCategory[m.category_label] || []).push(m));
+  Object.values(byCategory).forEach(list => list.sort((a, b) => a.tier - b.tier));
+  return byCategory;
+}
+
+async function openRepProfile(repId) {
+  document.getElementById('manager-rep-list').style.display = 'none';
+  document.getElementById('manager-rep-profile').style.display = 'block';
+  document.getElementById('profile-rep-name').textContent = repId;
+  document.getElementById('profile-rep-sub').textContent = 'Loading...';
+
+  const [{ data: progData }, { data: attemptData }] = await Promise.all([
+    sb.from('trainee_progress').select('*').eq('rep_id', repId),
+    sb.from('training_attempts').select('*').eq('rep_id', repId).order('created_at', { ascending: false }),
+  ]);
+
+  const progressByModule = {};
+  (progData || []).forEach(p => progressByModule[p.module_id] = p);
+
+  const attempts = attemptData || [];
+  const attemptsByModule = {};
+  attempts.forEach(a => {
+    if (a.overall_score == null) return;
+    (attemptsByModule[a.module_id] = attemptsByModule[a.module_id] || []).push(a.overall_score);
+  });
+
+  const team = (progData && progData[0] && progData[0].team) || (attempts[0] && attempts[0].team) || '';
+
+  // --- Readiness grid (read-only — no click-to-start, this is manager view) ---
+  const byCategory = groupModulesForProfile();
+  const categories = Object.keys(byCategory);
+  const tierCount = Math.max(1, ...allModulesList.map(m => m.tier));
+
+  const cellInfo = {};
+  allModulesList.forEach(m => {
+    const catMods = byCategory[m.category_label];
+    const p = progressByModule[m.id];
+    let status;
+    if (p && p.status === 'passed') status = 'passed';
+    else {
+      let unlocked = m.tier === 1;
+      if (!unlocked) {
+        const prev = catMods.find(x => x.tier === m.tier - 1);
+        unlocked = prev && progressByModule[prev.id] && progressByModule[prev.id].status === 'passed';
+      }
+      if (!unlocked) status = 'locked';
+      else status = (attemptsByModule[m.id] && attemptsByModule[m.id].length) ? 'attempted' : 'notstarted';
+    }
+    const scores = attemptsByModule[m.id];
+    const avg = scores && scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : null;
+    cellInfo[m.id] = { status, avg };
+  });
+
+  let currentTier = 1;
+  allModulesList.forEach(m => { if (cellInfo[m.id].status !== 'locked') currentTier = Math.max(currentTier, m.tier); });
+  const passedCount = allModulesList.filter(m => cellInfo[m.id].status === 'passed').length;
+  const totalCount = allModulesList.length || 1;
+  const pctCertified = Math.round((passedCount / totalCount) * 100);
+
+  document.getElementById('profile-rep-sub').textContent = `${team ? team + ' · ' : ''}Tier ${currentTier} of ${tierCount} · ${pctCertified}% certified`;
+
+  let gridHtml = `<div class="rg-row rg-header-row" style="--tier-count:${tierCount}"><div></div>`;
+  for (let t = 1; t <= tierCount; t++) gridHtml += `<div class="rg-col-label">Tier ${t}</div>`;
+  gridHtml += `</div>`;
+  categories.forEach(cat => {
+    const catMods = byCategory[cat];
+    gridHtml += `<div class="rg-row" style="--tier-count:${tierCount}"><div class="rg-row-label">${cat}</div>`;
+    for (let t = 1; t <= tierCount; t++) {
+      const mod = catMods.find(m => m.tier === t);
+      if (!mod) { gridHtml += `<div class="rg-cell rg-locked">—</div>`; continue; }
+      const info = cellInfo[mod.id];
+      let label = info.status === 'passed' ? 'Passed'
+        : info.status === 'attempted' ? `${Math.round(info.avg)} avg`
+        : info.status === 'notstarted' ? 'Not started' : 'Locked';
+      gridHtml += `<div class="rg-cell rg-${info.status}">${label}</div>`;
+    }
+    gridHtml += `</div>`;
+  });
+  document.getElementById('profile-readiness-grid').innerHTML = gridHtml;
+
+  // --- Graduation status / recommended next ---
+  const recCard = document.getElementById('profile-recommend-card');
+  if (passedCount === totalCount) {
+    recCard.style.background = 'rgba(10,155,111,.08)';
+    recCard.style.borderColor = 'var(--green)';
+    document.getElementById('profile-recommend-title').textContent = '🎓 Graduated — all modules passed';
+    document.getElementById('profile-recommend-sub').textContent = 'This rep has completed the full training path.';
+  } else {
+    recCard.style.background = '';
+    recCard.style.borderColor = '';
+    const candidates = allModulesList.filter(m => cellInfo[m.id].status === 'attempted' || cellInfo[m.id].status === 'notstarted');
+    candidates.sort((a, b) => {
+      const avgA = cellInfo[a.id].avg, avgB = cellInfo[b.id].avg;
+      if (avgA != null && avgB != null) return avgA - avgB;
+      if (avgA != null) return -1;
+      if (avgB != null) return 1;
+      return a.order_index - b.order_index;
+    });
+    const next = candidates[0];
+    if (next) {
+      document.getElementById('profile-recommend-title').textContent = `Next to graduate: ${next.category_label}, tier ${next.tier}`;
+      document.getElementById('profile-recommend-sub').textContent = cellInfo[next.id].avg != null
+        ? 'Lowest average score across their attempts so far'
+        : 'Not attempted yet';
+    } else {
+      document.getElementById('profile-recommend-title').textContent = 'All unlocked modules attempted';
+      document.getElementById('profile-recommend-sub').textContent = 'Remaining modules are locked behind earlier tiers not yet passed.';
+    }
+  }
+
+  // --- Strengths & growth areas: aggregate scored dimensions across done attempts ---
+  const doneAttempts = attempts.filter(a => a.status === 'done' && a.result_json);
+  const dims = [
+    { key: 'conversation_quality_score', label: 'Conversation Quality' },
+    { key: 'script_adherence_score', label: 'Script Adherence' },
+    { key: 'question_quality_score', label: 'Question Quality' },
+    { key: 'disposition_match_score', label: 'Disposition Accuracy' },
+  ];
+  const chipsHtml = dims.map(d => {
+    const vals = doneAttempts.map(a => d.key === 'disposition_match_score' ? a.disposition_match_score : a.result_json[d.key]).filter(v => v != null);
+    if (!vals.length) return `<div class="skill-chip"><div class="skill-chip-value" style="color:var(--muted)">—</div><div class="skill-chip-label">${d.label}</div></div>`;
+    const avg = vals.reduce((a, b) => a + b, 0) / vals.length;
+    const color = avg >= 7 ? 'var(--green)' : (avg >= 4 ? 'var(--amber)' : 'var(--red)');
+    return `<div class="skill-chip"><div class="skill-chip-value" style="color:${color}">${avg.toFixed(1)}</div><div class="skill-chip-label">${d.label}</div></div>`;
+  }).join('');
+  document.getElementById('profile-skill-chips').innerHTML = chipsHtml || '<p class="muted-small">No scored attempts yet.</p>';
+
+  // Call out the weakest dimension in plain language
+  const dimAverages = dims.map(d => {
+    const vals = doneAttempts.map(a => d.key === 'disposition_match_score' ? a.disposition_match_score : a.result_json[d.key]).filter(v => v != null);
+    return vals.length ? { label: d.label, avg: vals.reduce((a, b) => a + b, 0) / vals.length } : null;
+  }).filter(Boolean);
+  const growthNote = document.getElementById('profile-growth-note');
+  if (dimAverages.length) {
+    const weakest = dimAverages.reduce((a, b) => a.avg < b.avg ? a : b);
+    growthNote.innerHTML = weakest.avg < 7
+      ? `<p class="muted-small"><strong style="color:var(--text)">Primary growth area: ${weakest.label}</strong> (avg ${weakest.avg.toFixed(1)}/10) — this is what's most worth coaching on right now.</p>`
+      : `<p class="muted-small">Scoring well across the board — no single weak area stands out.</p>`;
+  } else {
+    growthNote.innerHTML = '';
+  }
+
+  // Recent coaching notes: "improvements" bullets from the most recent few done attempts
+  const recentWithImprovements = doneAttempts.filter(a => a.result_json.improvements).slice(0, 5);
+  const coachingEl = document.getElementById('profile-coaching-notes');
+  if (recentWithImprovements.length) {
+    coachingEl.innerHTML = `
+      <div class="section-label">Recent Coaching Notes</div>
+      <ul class="bullet-list">
+        ${recentWithImprovements.flatMap(a => (a.result_json.improvements || '').split('|').filter(Boolean).slice(0, 2)).slice(0, 8).map(s => `<li>${escapeHtml(s)}</li>`).join('')}
+      </ul>`;
+  } else {
+    coachingEl.innerHTML = '';
+  }
+
+  // --- Attempt history ---
+  const historyEl = document.getElementById('profile-attempt-history');
+  historyEl.innerHTML = (attempts || []).slice(0, 30).map(a => {
+    const mod = allModulesById[a.module_id];
+    return `
+    <div class="attempt-history-item">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <strong style="font-size:13px">${mod ? mod.title : ''}</strong>
+        <span class="status-chip" style="background:${a.passed ? 'var(--green)22' : 'var(--red)22'};color:${a.passed ? 'var(--green)' : 'var(--red)'}">${a.overall_score != null ? Number(a.overall_score).toFixed(1) : '—'}</span>
+      </div>
+      <p class="muted-small">${new Date(a.created_at).toLocaleString()} · Disposition: ${a.disposition_reported || '—'} ${a.disposition_match_score != null ? `· Match ${a.disposition_match_score}/10` : ''}</p>
+      ${a.lead_source ? `<p class="muted-small">Lead source: ${LEAD_SOURCES[a.lead_source]?.label || a.lead_source} · Calling from: ${a.fh_name || '—'} · AFP referenced: ${a.afp_name || '—'}</p>` : ''}
+      ${a.disposition_feedback ? `<p style="font-size:12px;color:var(--muted2);margin-top:6px">${a.disposition_feedback}</p>` : ''}
+      ${renderPlannerDetail(a.disposition_form_json)}
+      <details style="margin-top:8px"><summary style="cursor:pointer;font-size:12px;color:var(--muted2)">Transcript</summary><pre style="white-space:pre-wrap;font-size:12px;color:var(--muted2);margin-top:8px">${escapeHtml(a.transcript || '')}</pre></details>
+    </div>`;
+  }).join('') || '<p class="muted-small">No attempts yet.</p>';
 }
 
 // Renders the structured planner-form detail (appointment or result path) —
@@ -1402,8 +1579,6 @@ function renderPlannerDetail(json) {
   }
   return '';
 }
-
-function closeAttemptModal() { document.getElementById('attempt-modal').style.display = 'none'; }
 
 // ═══════════════════════════════════════════════════════════
 // UTIL
