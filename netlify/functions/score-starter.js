@@ -20,6 +20,7 @@ exports.handler = async (event) => {
     const {
       repId, team, moduleId, transcript,
       dispositionReported, dispositionNotesText, notesPhotoUrl, dispositionFormJson,
+      leadSource, fhName, afpName,
     } = body;
 
     if (!repId || !moduleId || !transcript) {
@@ -37,6 +38,9 @@ exports.handler = async (event) => {
         disposition_notes_text: dispositionNotesText || null,
         notes_photo_url: notesPhotoUrl || null,
         disposition_form_json: dispositionFormJson || null,
+        lead_source: leadSource || null,
+        fh_name: fhName || null,
+        afp_name: afpName || null,
         status: 'scoring',
       }),
     });

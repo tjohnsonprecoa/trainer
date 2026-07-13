@@ -89,6 +89,13 @@
   @keyframes orb-pulse { 0% { box-shadow: 0 0 0 0 rgba(108,99,255,.35); } 70% { box-shadow: 0 0 0 18px rgba(108,99,255,0); } 100% { box-shadow: 0 0 0 0 rgba(108,99,255,0); } }
   @keyframes orb-pulse-green { 0% { box-shadow: 0 0 0 0 rgba(10,155,111,.3); } 70% { box-shadow: 0 0 0 16px rgba(10,155,111,0); } 100% { box-shadow: 0 0 0 0 rgba(10,155,111,0); } }
   .call-status-pill { display: inline-block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; padding: 5px 12px; border-radius: 20px; background: var(--surface2); color: var(--muted2); margin-bottom: 16px; }
+
+  /* Pre-call briefing */
+  .briefing-row { display: flex; align-items: center; gap: 12px; padding: 14px 0; border-bottom: 1px solid var(--border); }
+  .briefing-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); width: 200px; flex-shrink: 0; }
+  .briefing-value { font-size: 14px; font-weight: 600; flex: 1; }
+  .briefing-opening { padding: 16px 0; }
+  .briefing-opening p { font-size: 13px; color: var(--muted2); line-height: 1.6; font-style: italic; margin-top: 8px; }
   .thinking-dots span { animation: blink 1.4s infinite; }
   .thinking-dots span:nth-child(2) { animation-delay: .2s; } .thinking-dots span:nth-child(3) { animation-delay: .4s; }
   @keyframes blink { 0%, 60%, 100% { opacity: .2; } 30% { opacity: 1; } }
@@ -232,6 +239,29 @@
         </div>
         <div class="recommend-arrow">→</div>
       </div>
+    </div>
+
+    <!-- Step: pre-call briefing -->
+    <div class="card" id="briefing-card" style="display:none">
+      <div class="card-title">This call</div>
+      <div class="briefing-row">
+        <div class="briefing-label">Lead Source</div>
+        <div class="briefing-value" id="briefing-lead-source"></div>
+      </div>
+      <div class="briefing-row">
+        <div class="briefing-label">Calling From</div>
+        <div class="briefing-value" id="briefing-fh-name"></div>
+        <button class="btn btn-ghost" style="width:auto;padding:8px 14px;font-size:12px" onclick="hearPronunciation()" id="hear-pronunciation-btn">🔊 Hear it</button>
+      </div>
+      <div class="briefing-row">
+        <div class="briefing-label">Advisor (AFP) You'll Reference</div>
+        <div class="briefing-value" id="briefing-afp-name"></div>
+      </div>
+      <div class="briefing-opening">
+        <div class="briefing-label">Your opening line for this lead source</div>
+        <p id="briefing-opening-text"></p>
+      </div>
+      <button class="btn btn-primary" style="margin-top:20px" onclick="proceedToCall()">Start Call →</button>
     </div>
 
     <!-- Step: role-play call -->
@@ -457,6 +487,58 @@ let mediaRecorder = null, audioChunks = [], isRecording = false;
 let lastNotesPhotoUrl = null;
 let lastAttemptId = null;
 
+// ═══════════════════════════════════════════════════════════
+// Real partner funeral homes. `pronunciation` is a phonetic respelling used
+// both for the "Hear it" button audio and the AI persona's instructions.
+// NOTE: several of these (German/Dutch/Cajun-derived surnames) have
+// non-obvious pronunciations — these are best-effort phonetic guesses, not
+// confirmed local pronunciation. Worth having someone at FPC double-check
+// the trickier ones (Matthysse-Kuiper-DeGraaf especially) before go-live.
+// ═══════════════════════════════════════════════════════════
+const FUNERAL_HOMES = [
+  { name: 'Akin-Davis Funeral Home', pronunciation: 'Akin-Davis Funeral Home' },
+  { name: 'Allen and Dahl Funeral Chapel', pronunciation: 'Allen and DAHL (rhymes with "doll") Funeral Chapel' },
+  { name: 'Alsip and Persons Funeral Chapel', pronunciation: 'AL-sip and Persons Funeral Chapel' },
+  { name: 'Bliley Funeral Homes', pronunciation: 'BLY-lee Funeral Homes' },
+  { name: 'Boze-Mitchell-Mckibbin Funeral Homes', pronunciation: 'BOHZ (rhymes with "doze") Mitchell muh-KIB-in Funeral Homes' },
+  { name: 'Broussards Mortuary', pronunciation: 'broo-SARDS Mortuary' },
+  { name: 'Flahiff Funeral Chapels', pronunciation: 'FLAY-hiff Funeral Chapels' },
+  { name: 'Geisen Funeral Homes', pronunciation: 'GUY-sen Funeral Homes' },
+  { name: 'Habing Family Funeral Home', pronunciation: 'HAY-bing Family Funeral Home' },
+  { name: 'Helke and Brainard Funeral Homes', pronunciation: 'HEL-kee and Brainard Funeral Homes' },
+  { name: 'Krause Funeral Homes', pronunciation: 'KROWSE (rhymes with "house") Funeral Homes' },
+  { name: 'Matthysse-Kuiper-DeGraaf Funeral Home', pronunciation: 'muh-TYSS KOY-per duh-GRAHF Funeral Home' },
+  { name: 'Meierhoffer Funeral Home', pronunciation: 'MY-er-hoff-er Funeral Home' },
+];
+
+const AFP_NAMES = [
+  'Michael Sanders', 'Karen Whitfield', 'David Ortiz', 'Susan Bell',
+  'James Whitaker', 'Patricia Nguyen', 'Robert Ellis', 'Linda Marsh',
+  'Thomas Reyes', 'Nancy Foster',
+];
+
+// Adapted opening (Greeting + MIR) per lead source, matching the real
+// script's variants — shown to the rep as a quick reference, and mirrored
+// server-side in realtime-session.js so the persona's backstory matches.
+const LEAD_SOURCES = {
+  direct_mail: {
+    label: 'Direct Mail',
+    opening: 'I\u2019m reaching out because we recently received your request for pre-planning information, as well as for the Final Wishes Organizer you sent back to us.',
+  },
+  internet: {
+    label: 'Internet',
+    opening: 'I\u2019m reaching out because we recently received your online request for pre-planning information, along with your request for our Final Wishes Organizer.',
+  },
+  veterans: {
+    label: 'Veterans Memorial Program',
+    opening: 'I\u2019m reaching out through our Veterans Memorial Program because we recently received your request for pre-planning information and veterans\u2019 burial benefits, as well as for the Final Wishes Organizer.',
+  },
+};
+
+let callFhName = null, callFhPronunciation = null, callAfpName = null, callLeadSource = null;
+
+function randomFrom(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
 function showPage(page, btn) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.getElementById('page-' + page).classList.add('active');
@@ -641,7 +723,41 @@ function startModule(moduleId) {
   activeModule = modules.find(m => m.id === moduleId);
   if (!activeModule) return;
   conversationHistory = [];
+
+  const fh = randomFrom(FUNERAL_HOMES);
+  callFhName = fh.name;
+  callFhPronunciation = fh.pronunciation;
+  callAfpName = randomFrom(AFP_NAMES);
+  callLeadSource = randomFrom(Object.keys(LEAD_SOURCES));
+
   document.getElementById('path-card').style.display = 'none';
+  document.getElementById('briefing-card').style.display = 'block';
+  document.getElementById('briefing-lead-source').textContent = LEAD_SOURCES[callLeadSource].label;
+  document.getElementById('briefing-fh-name').textContent = callFhName;
+  document.getElementById('briefing-afp-name').textContent = callAfpName;
+  document.getElementById('briefing-opening-text').textContent = '"' + LEAD_SOURCES[callLeadSource].opening + '"';
+}
+
+function hearPronunciation() {
+  const btn = document.getElementById('hear-pronunciation-btn');
+  btn.disabled = true;
+  fetch('/.netlify/functions/tts', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text: callFhPronunciation, gender: 'neutral' }),
+  })
+    .then(res => res.json())
+    .then(data => {
+      btn.disabled = false;
+      if (data.error || !data.audioBase64) return;
+      const bytes = Uint8Array.from(atob(data.audioBase64), c => c.charCodeAt(0));
+      const blob = new Blob([bytes], { type: data.mimeType || 'audio/mpeg' });
+      new Audio(URL.createObjectURL(blob)).play();
+    })
+    .catch(() => { btn.disabled = false; });
+}
+
+function proceedToCall() {
+  document.getElementById('briefing-card').style.display = 'none';
   document.getElementById('call-card').style.display = 'block';
   document.getElementById('call-persona-name').textContent = activeModule.persona_name;
   document.getElementById('call-module-title').textContent = activeModule.title;
@@ -656,7 +772,14 @@ async function connectRealtimeSession() {
 
     const tokenRes = await fetch('/.netlify/functions/realtime-session', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ personaPrompt: activeModule.persona_prompt, gender: activeModule.gender }),
+      body: JSON.stringify({
+        personaPrompt: activeModule.persona_prompt,
+        gender: activeModule.gender,
+        fhName: callFhName,
+        fhPronunciation: callFhPronunciation,
+        afpName: callAfpName,
+        leadSource: callLeadSource,
+      }),
     });
     const tokenData = await tokenRes.json();
     if (tokenData.error) throw new Error(tokenData.error);
@@ -1013,6 +1136,7 @@ async function submitToScoring(dispositionReported, dispositionNotesText, dispos
       body: JSON.stringify({
         repId, team: repTeam, moduleId: activeModule.id, transcript,
         dispositionReported, dispositionNotesText, notesPhotoUrl, dispositionFormJson,
+        leadSource: callLeadSource, fhName: callFhName, afpName: callAfpName,
       }),
     });
     const startData = await startRes.json();
@@ -1190,6 +1314,7 @@ async function openRepAttempts(rep) {
           <span class="status-chip" style="background:${a.passed ? 'var(--green)22' : 'var(--red)22'};color:${a.passed ? 'var(--green)' : 'var(--red)'}">${a.overall_score != null ? Number(a.overall_score).toFixed(1) : '—'}</span>
         </div>
         <p class="muted-small">${new Date(a.created_at).toLocaleString()} · Disposition: ${a.disposition_reported || '—'} ${a.disposition_match_score != null ? `· Match ${a.disposition_match_score}/10` : ''}</p>
+        ${a.lead_source ? `<p class="muted-small">Lead source: ${LEAD_SOURCES[a.lead_source]?.label || a.lead_source} · Calling from: ${a.fh_name || '—'} · AFP referenced: ${a.afp_name || '—'}</p>` : ''}
         ${a.disposition_feedback ? `<p style="font-size:12px;color:var(--muted2);margin-top:6px">${a.disposition_feedback}</p>` : ''}
         ${renderPlannerDetail(a.disposition_form_json)}
         ${a.notes_photo_url ? `<img src="${a.notes_photo_url}" style="max-width:100%;max-height:160px;border-radius:8px;margin-top:8px;border:1px solid var(--border)">` : ''}
