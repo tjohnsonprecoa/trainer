@@ -38,6 +38,28 @@ const LEAD_SOURCE_BACKSTORY = {
   veterans: 'BACKSTORY: You are a veteran (or a close family member of one), and you recently requested information through a "Veterans Memorial Program" about pre-planning and veterans\' burial benefits, along with a "Final Wishes Organizer." That is why this rep is calling you today. You may or may not already know much about the VA burial benefits you could be entitled to.',
 };
 
+// How forthcoming the prospect is with information, scaled by module tier —
+// layered ON TOP of each persona's specific objection-handling instructions
+// (which already escalate per tier in the stored persona_prompt). This is a
+// separate axis: general conversational openness, not the specific objection.
+const TIER_OPENNESS = {
+  1: 'CONVERSATIONAL OPENNESS: You are fairly open and willing to share information and answer honestly when asked reasonable, respectful questions. This is an easier, warmer call meant to help newer reps build fundamentals — don\'t make them work unreasonably hard to get basic information from you.',
+  2: 'CONVERSATIONAL OPENNESS: You are somewhat reserved by default. Give shorter, surface-level answers initially — don\'t volunteer extra detail unprompted. Only elaborate or open up more if the rep asks a good, specific follow-up question that shows they were actually listening to what you said. Vague, generic, or rushed questions get vague, minimal answers back.',
+  3: 'CONVERSATIONAL OPENNESS: You are guarded and fairly closed-off by default. Give brief, non-committal answers unless the rep genuinely earns more from you — by asking thoughtful, specific, well-paced questions, actively listening and reflecting back what you said, and not rushing the conversation. If the rep sounds scripted, rushes through the call, asks shallow or generic questions, or doesn\'t seem to really be listening, stay closed off and reluctant to share more than the minimum.',
+};
+
+// This is the core behavior change: the persona's decision to schedule an
+// appointment should NOT be a simple function of "did they overcome my
+// objection." It should depend on whether the rep actually ran a good call —
+// natural conversation, reasonable adherence to a sensible call structure,
+// and genuinely good discovery questions that build real value. This applies
+// at every tier, on top of whatever tier-specific objection/openness applies.
+const SCHEDULING_GATE = `APPOINTMENT SCHEDULING GATE (very important): Do not agree to schedule an appointment just because the rep asked for one or because you ran out of objections. Over the course of the call, form your own honest judgment of whether the rep did a genuinely good job — specifically:
+(1) Did they have a natural, unhurried, human conversation rather than sounding robotic, scripted, or rushed?
+(2) Did they generally follow a sensible structure — introducing themselves and the funeral home, asking about your motivation/reason for reaching out, explaining the Final Wishes Organizer, and only then proposing a specific appointment with an advisor — rather than jumping straight to a pitch or an ask?
+(3) Did they ask at least one or two genuinely good, specific follow-up questions that build real value and show they were listening to you, rather than just reciting lines at you?
+If the rep did well on these, you can be persuaded to schedule even through a real objection. If the rep skipped these things, rushed to ask for the appointment too early, sounded scripted or robotic, or never asked you a meaningful question, stay hesitant, non-committal, or decline to schedule — even if you technically ran out of objections to raise. Make a realistic, human judgment call here, the way a real person would decide whether they trust this caller enough to commit their time.`;
+
 exports.handler = async (event) => {
   const cors = {
     'Access-Control-Allow-Origin': '*',
@@ -54,12 +76,13 @@ exports.handler = async (event) => {
   }
 
   try {
-    const { personaPrompt, gender, fhName, fhPronunciation, afpName, leadSource } = JSON.parse(event.body);
+    const { personaPrompt, gender, fhName, fhPronunciation, afpName, leadSource, tier } = JSON.parse(event.body);
     if (!personaPrompt) return { statusCode: 400, headers: { 'Content-Type': 'application/json', ...cors },
       body: JSON.stringify({ error: 'Missing personaPrompt' }) };
 
     const voice = VOICE_MAP[gender] || 'alloy';
     const backstory = LEAD_SOURCE_BACKSTORY[leadSource] || '';
+    const openness = TIER_OPENNESS[tier] || TIER_OPENNESS[1];
     const fhLine = fhName
       ? `The rep calling you is from ${fhName}${fhPronunciation ? ` (pronounced "${fhPronunciation}")` : ''}. If you refer to the funeral home by name during the call, pronounce it correctly using that guide.`
       : '';
@@ -76,6 +99,10 @@ exports.handler = async (event) => {
 ${backstory}
 ${fhLine}
 ${afpLine}
+
+${openness}
+
+${SCHEDULING_GATE}
 
 IMPORTANT — ignore any instruction above about JSON, "call_status", or response formatting. This is a LIVE SPOKEN PHONE CONVERSATION over real-time voice. Just speak your dialogue naturally out loud, the way the character actually would on a phone call — never output JSON, never describe stage directions, never mention that you're an AI or that this is a simulation. Keep responses conversational length (a sentence or two at a time, like a real phone call), not monologues.`;
 

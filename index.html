@@ -96,6 +96,22 @@
   .briefing-value { font-size: 14px; font-weight: 600; flex: 1; }
   .briefing-opening { padding: 16px 0; }
   .briefing-opening p { font-size: 13px; color: var(--muted2); line-height: 1.6; font-style: italic; margin-top: 8px; }
+  .briefing-phonetic { font-size: 12px; color: var(--muted); font-style: italic; margin-top: 2px; }
+
+  /* Persistent call info panel (lead source / FH / AFP during the role-play) */
+  .call-info-panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; box-shadow: 0 1px 3px rgba(20,20,40,.04); }
+  .call-info-title { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin-bottom: 10px; }
+  .call-info-row { margin-bottom: 12px; }
+  .call-info-row:last-child { margin-bottom: 0; }
+  .call-info-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); margin-bottom: 2px; }
+  .call-info-value { font-weight: 600; font-size: 13px; color: var(--text); }
+  .call-info-phonetic { font-size: 11px; color: var(--muted); font-style: italic; margin-top: 2px; }
+  @media (min-width: 1300px) {
+    .call-info-panel { position: fixed; top: 110px; right: 40px; width: 220px; z-index: 90; }
+  }
+  @media (max-width: 1299px) {
+    .call-info-panel { max-width: 760px; margin: 0 auto 16px; }
+  }
   .thinking-dots span { animation: blink 1.4s infinite; }
   .thinking-dots span:nth-child(2) { animation-delay: .2s; } .thinking-dots span:nth-child(3) { animation-delay: .4s; }
   @keyframes blink { 0%, 60%, 100% { opacity: .2; } 30% { opacity: 1; } }
@@ -163,6 +179,10 @@
   .bullet-list li::before { content: '—'; position: absolute; left: 0; color: var(--accent); }
   .disposition-box { background: var(--surface2); border-radius: var(--radius); padding: 16px; margin-top: 8px; }
   .disposition-score { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 20px; }
+  .skill-chip-row { display: flex; gap: 10px; flex-wrap: wrap; }
+  .skill-chip { flex: 1; min-width: 120px; background: var(--surface2); border-radius: var(--radius); padding: 14px 10px; text-align: center; }
+  .skill-chip-value { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 20px; }
+  .skill-chip-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); margin-top: 4px; }
 
   .error-box { background: rgba(255,77,109,.1); border: 1px solid var(--red); color: var(--red); padding: 12px 16px; border-radius: var(--radius); font-size: 13px; margin-bottom: 16px; display: none; }
   .progress-wrap { display: none; text-align: center; padding: 30px 0; }
@@ -250,8 +270,10 @@
       </div>
       <div class="briefing-row">
         <div class="briefing-label">Calling From</div>
-        <div class="briefing-value" id="briefing-fh-name"></div>
-        <button class="btn btn-ghost" style="width:auto;padding:8px 14px;font-size:12px" onclick="hearPronunciation()" id="hear-pronunciation-btn">🔊 Hear it</button>
+        <div>
+          <div class="briefing-value" id="briefing-fh-name"></div>
+          <div class="briefing-phonetic" id="briefing-fh-phonetic"></div>
+        </div>
       </div>
       <div class="briefing-row">
         <div class="briefing-label">Advisor (AFP) You'll Reference</div>
@@ -265,6 +287,24 @@
     </div>
 
     <!-- Step: role-play call -->
+    <!-- Persistent call info (lead source / FH / AFP) — stays visible for the whole call -->
+    <div class="call-info-panel" id="call-info-panel" style="display:none">
+      <div class="call-info-title">This Call</div>
+      <div class="call-info-row">
+        <div class="call-info-label">Lead Source</div>
+        <div class="call-info-value" id="info-lead-source"></div>
+      </div>
+      <div class="call-info-row">
+        <div class="call-info-label">Calling From</div>
+        <div class="call-info-value" id="info-fh-name"></div>
+        <div class="call-info-phonetic" id="info-fh-phonetic"></div>
+      </div>
+      <div class="call-info-row">
+        <div class="call-info-label">AFP Name</div>
+        <div class="call-info-value" id="info-afp-name"></div>
+      </div>
+    </div>
+
     <div class="card" id="call-card" style="display:none">
       <div class="call-header">
         <div class="persona-avatar">👤</div>
@@ -734,27 +774,11 @@ function startModule(moduleId) {
   document.getElementById('briefing-card').style.display = 'block';
   document.getElementById('briefing-lead-source').textContent = LEAD_SOURCES[callLeadSource].label;
   document.getElementById('briefing-fh-name').textContent = callFhName;
+  document.getElementById('briefing-fh-phonetic').textContent = callFhPronunciation !== callFhName ? `pronounced: ${callFhPronunciation}` : '';
   document.getElementById('briefing-afp-name').textContent = callAfpName;
   document.getElementById('briefing-opening-text').textContent = '"' + LEAD_SOURCES[callLeadSource].opening + '"';
 }
 
-function hearPronunciation() {
-  const btn = document.getElementById('hear-pronunciation-btn');
-  btn.disabled = true;
-  fetch('/.netlify/functions/tts', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text: callFhPronunciation, gender: 'neutral' }),
-  })
-    .then(res => res.json())
-    .then(data => {
-      btn.disabled = false;
-      if (data.error || !data.audioBase64) return;
-      const bytes = Uint8Array.from(atob(data.audioBase64), c => c.charCodeAt(0));
-      const blob = new Blob([bytes], { type: data.mimeType || 'audio/mpeg' });
-      new Audio(URL.createObjectURL(blob)).play();
-    })
-    .catch(() => { btn.disabled = false; });
-}
 
 function proceedToCall() {
   document.getElementById('briefing-card').style.display = 'none';
@@ -763,6 +787,13 @@ function proceedToCall() {
   document.getElementById('call-module-title').textContent = activeModule.title;
   document.getElementById('transcript-log').innerHTML = '';
   document.getElementById('voice-orb').className = 'voice-orb state-calibrating';
+
+  document.getElementById('info-lead-source').textContent = LEAD_SOURCES[callLeadSource].label;
+  document.getElementById('info-fh-name').textContent = callFhName;
+  document.getElementById('info-fh-phonetic').textContent = callFhPronunciation !== callFhName ? `pronounced: ${callFhPronunciation}` : '';
+  document.getElementById('info-afp-name').textContent = callAfpName;
+  document.getElementById('call-info-panel').style.display = 'block';
+
   connectRealtimeSession();
 }
 
@@ -779,6 +810,7 @@ async function connectRealtimeSession() {
         fhPronunciation: callFhPronunciation,
         afpName: callAfpName,
         leadSource: callLeadSource,
+        tier: activeModule.tier,
       }),
     });
     const tokenData = await tokenRes.json();
@@ -920,6 +952,7 @@ function endCallManually() {
   if (conversationHistory.length === 0) { alert('Have at least one exchange before ending the call.'); return; }
   teardownRealtimeSession();
   document.getElementById('call-card').style.display = 'none';
+  document.getElementById('call-info-panel').style.display = 'none';
   setupPlanner();
   document.getElementById('planner-card').style.display = 'block';
 }
@@ -1195,6 +1228,14 @@ function renderResult(r) {
   const improvements = (r.improvements || '').split('|').filter(Boolean);
   const card = document.getElementById('result-card');
   card.style.display = 'block';
+
+  const scoreColor = (n) => n >= 7 ? 'var(--green)' : (n >= 4 ? 'var(--amber)' : 'var(--red)');
+  const scoreChip = (label, val) => val == null ? '' : `
+    <div class="skill-chip">
+      <div class="skill-chip-value" style="color:${scoreColor(val)}">${val}/10</div>
+      <div class="skill-chip-label">${label}</div>
+    </div>`;
+
   card.innerHTML = `
     <div class="score-hero">
       <div class="score-number ${passed ? 'score-pass' : 'score-fail'}">${Number(r.overall_score).toFixed(1)}</div>
@@ -1204,6 +1245,15 @@ function renderResult(r) {
         <span class="pill">${r.objection_handled ? '💪 Objection handled' : '⚠️ Objection not fully handled'}</span>
       </div>
       <p style="font-size:14px;color:var(--muted2);margin-top:8px">${r.verdict || ''}</p>
+    </div>
+
+    <div class="section-block">
+      <div class="section-label">How You Ran The Call</div>
+      <div class="skill-chip-row">
+        ${scoreChip('Conversation Quality', r.conversation_quality_score)}
+        ${scoreChip('Script Adherence', r.script_adherence_score)}
+        ${scoreChip('Question Quality', r.question_quality_score)}
+      </div>
     </div>
 
     <div class="section-block">

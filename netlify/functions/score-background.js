@@ -106,7 +106,14 @@ OBJECTION TYPE: ${objectionType}
 DIFFICULTY: ${difficulty}
 PASS THRESHOLD: ${passThreshold}/10
 
-Score the rep's performance on the role-play call the same way a real FPC call would be scored: rapport, objection handling, urgency/value-building, professionalism, and whether an appointment was reasonably earned given the persona's difficulty. Score generously for easy personas that required little objection handling, and hold a higher bar for harder personas (moderate/hard/veteran).
+Score the rep primarily on HOW they ran the call, not just whether they landed an appointment. Getting an appointment matters much less than doing these things well:
+1. CONVERSATION QUALITY — did they sound natural, unhurried, and genuinely present, rather than robotic, scripted-sounding, or rushed?
+2. SCRIPT ADHERENCE — did they generally follow a sensible call structure (introduce themselves and the funeral home, ask about the prospect's motivation/reason for reaching out, explain the Final Wishes Organizer, then propose a specific appointment with an advisor) rather than skipping steps or jumping straight to an ask?
+3. QUESTION QUALITY — did they ask good, specific, meaningful follow-up questions that build real value and show they were actually listening, rather than just reciting lines or asking generic/shallow questions?
+
+An appointment scheduled after doing these three things well is a strong outcome. An appointment "scheduled" because the AI persona just gave in easily, or because the rep rushed to ask without earning it, should NOT score well — that's a false positive the real world won't reward. Likewise, a call that does NOT end in an appointment but where the rep had a genuinely good conversation, stayed roughly on script, and asked good questions can still score reasonably — that's a rep doing the right things against a tough or unconvinced prospect, which is exactly what these harder-tier modules are for.
+
+Score generously for easy (tier 1) personas that required little resistance-handling, and hold a higher bar for harder (tier 2/3) personas — but the THING you're grading at every tier is conversation quality, script adherence, and question quality, not just the binary appointment outcome.
 
 SECOND, separately, grade the rep's DISPOSITION ACCURACY — how well they logged the outcome of this call in their planner app afterward:
 - The rep reported the disposition as: "${dispositionLabel}"
@@ -116,7 +123,7 @@ SECOND, separately, grade the rep's DISPOSITION ACCURACY — how well they logge
 Compare all of this against what ACTUALLY happened in the transcript. New hires often over-report positive outcomes, under-document key details (family name, callback time, specific objection raised), or file a disposition that doesn't match reality. Grade disposition_match_score 1-10: 10 = disposition and notes are accurate and complete relative to the transcript; low scores = mismatch (e.g. logged "Appointment Set" but no appointment was actually confirmed) or notes missing details that were clearly stated on the call (names, dates, callback times, specific objections).
 
 Respond with ONLY this JSON object, no markdown fences, no preamble:
-{"overall_score":<1.0-10.0>,"passed":<bool, true if overall_score >= ${passThreshold}>,"appointment_scheduled":<bool>,"objection_handled":<bool>,"strengths":"<thing1>|<thing2>|<thing3>","improvements":"<fix1>|<fix2>|<fix3>","key_moment":"<the single pivot point in the call, quote if possible>","coaching_tip":"<one concrete drill for next time>","disposition_match_score":<1-10>,"disposition_feedback":"<specific comparison: what they logged vs. what actually happened, and what a complete/accurate note would have included>","verdict":"<12-18 word summary of the whole attempt>"}`;
+{"overall_score":<1.0-10.0>,"passed":<bool, true if overall_score >= ${passThreshold}>,"appointment_scheduled":<bool>,"objection_handled":<bool>,"conversation_quality_score":<1-10>,"script_adherence_score":<1-10>,"question_quality_score":<1-10>,"strengths":"<thing1>|<thing2>|<thing3>","improvements":"<fix1>|<fix2>|<fix3>","key_moment":"<the single pivot point in the call, quote if possible>","coaching_tip":"<one concrete drill for next time>","disposition_match_score":<1-10>,"disposition_feedback":"<specific comparison: what they logged vs. what actually happened, and what a complete/accurate note would have included>","verdict":"<12-18 word summary of the whole attempt>"}`;
 
     const userContent = [
       { type: 'text', text: `ROLE-PLAY TRANSCRIPT:\n${transcript}` },
