@@ -46,6 +46,16 @@ Either path can also attach a photo of the notes the rep took during the call.
 
 **Note on scoring**: only the coarse outcome (appointment set vs. which disposition) and notes feed the AI's disposition-accuracy grade, same as before. The full structured detail (location, attendee info, phone verification, queue/schedule choice, etc.) is captured in `training_attempts.disposition_form_json` for **manager review only** — it shows up in the Manager tab's attempt drill-down, but isn't graded by the AI yet. That can be layered in later once there's a clearer sense of what's worth grading there.
 
+## The role-play call: auto-listen
+
+The mic stays live for the whole call — no push-to-talk button in the normal flow. The app watches microphone volume in real time (Web Audio API): sustained talking starts capturing automatically, and ~1.1 seconds of quiet after that automatically ends your turn and sends it off for transcription. After the AI prospect finishes speaking, the mic re-arms itself automatically — the rep never has to click anything mid-call.
+
+A **Pause mic** button is available if a rep needs a moment (someone walks in, they need to think) — click again to resume. If mic permission is denied or voice detection fails to initialize for any reason, the app falls back to the original push-to-talk button automatically so the call isn't blocked entirely.
+
+Tuning constants live at the top of the call-loop JS in `index.html` if the auto-detection feels too trigger-happy or too slow to cut off:
+- `VAD_SPEECH_RMS` — how loud counts as "talking" (raise if it's picking up background noise; lower if it's missing quiet talkers)
+- `VAD_SILENCE_MS` — how long it waits in silence before considering a turn finished (raise if it's cutting reps off mid-sentence during pauses; lower if it feels slow to respond)
+
 ## Known v1 limitations (per the project plan's recommendations)
 
 - **TTS is browser-native** (`speechSynthesis`) — free but robotic. Upgrading to ElevenLabs is a v2 item; it needs a Netlify function to hold the API key server-side so the browser never sees it.
