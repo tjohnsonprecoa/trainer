@@ -19,7 +19,7 @@ exports.handler = async (event) => {
     const body = JSON.parse(event.body);
     const {
       repId, team, moduleId, transcript,
-      dispositionReported, dispositionNotesText, notesPhotoUrl,
+      dispositionReported, dispositionNotesText, notesPhotoUrl, dispositionFormJson,
     } = body;
 
     if (!repId || !moduleId || !transcript) {
@@ -36,6 +36,7 @@ exports.handler = async (event) => {
         disposition_reported: dispositionReported || null,
         disposition_notes_text: dispositionNotesText || null,
         notes_photo_url: notesPhotoUrl || null,
+        disposition_form_json: dispositionFormJson || null,
         status: 'scoring',
       }),
     });

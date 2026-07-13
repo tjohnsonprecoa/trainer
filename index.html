@@ -96,6 +96,44 @@
   .notes-preview { max-width: 100%; max-height: 260px; border-radius: var(--radius); margin-top: 12px; border: 1px solid var(--border); }
   .file-selected { background: rgba(0,229,160,.08); border-color: var(--green); padding: 14px 18px; display: flex; align-items: center; gap: 10px; border-radius: var(--radius); border: 1px solid var(--green); }
   .file-selected .file-name { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--green); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* Planner: path tabs */
+  .planner-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
+  .planner-tab { padding: 16px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--surface2); text-align: center; cursor: pointer; transition: all .2s; }
+  .planner-tab:hover { border-color: var(--accent); }
+  .planner-tab.active { border-color: var(--accent); background: rgba(108,99,255,.08); }
+  .planner-tab-title { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 13px; margin-bottom: 2px; }
+  .planner-tab-sub { font-size: 11px; color: var(--muted); }
+
+  /* Planner: appointment form */
+  .lead-banner { background: var(--surface2); border-radius: var(--radius); padding: 14px 16px; margin-bottom: 18px; display: flex; justify-content: space-between; align-items: center; }
+  .lead-banner-name { font-weight: 700; font-size: 14px; }
+  .lead-banner-sub { font-size: 12px; color: var(--muted); }
+  .radio-group { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+  .radio-option { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; cursor: pointer; transition: all .15s; font-size: 13px; }
+  .radio-option:hover { border-color: var(--accent); }
+  .radio-option.selected { border-color: var(--accent); background: rgba(108,99,255,.06); }
+  .radio-option input { margin: 0; }
+  .phone-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .phone-part { width: 64px; text-align: center; margin-bottom: 0; font-family: 'DM Mono', monospace; }
+  .verify-check { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted2); margin-bottom: 16px; cursor: pointer; }
+  .verify-check input { width: auto; margin: 0; }
+
+  /* Planner: result/disposition grid */
+  .result-columns { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin-bottom: 8px; }
+  .result-col-header { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; padding: 8px 10px; border-radius: 6px 6px 0 0; color: #fff; text-align: center; }
+  .result-col-header.answer { background: #1a6e8c; }
+  .result-col-header.noanswer { background: #14577a; }
+  .result-col-header.other { background: #0f4560; }
+  .result-col-body { background: #f4f8fa; border-radius: 0 0 6px 6px; padding: 6px; }
+  .result-option { padding: 10px 10px; font-size: 12.5px; border-radius: 5px; cursor: pointer; transition: all .15s; color: var(--text); }
+  .result-option:hover { background: rgba(108,99,255,.1); }
+  .result-option.selected { background: var(--accent); color: #fff; font-weight: 600; }
+  .result-panel { margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--border); }
+  .callback-toggle { display: flex; gap: 10px; margin-bottom: 16px; }
+  .callback-option { flex: 1; text-align: center; padding: 10px; border: 1px solid var(--border); border-radius: 8px; cursor: pointer; font-size: 13px; transition: all .15s; }
+  .callback-option.selected { border-color: var(--accent); background: rgba(108,99,255,.08); color: var(--accent); font-weight: 600; }
+  .time-select-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   .file-clear { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 18px; }
 
   /* Result screen */
@@ -209,33 +247,153 @@
       </div>
     </div>
 
-    <!-- Step: disposition capture -->
-    <div class="card" id="disposition-card" style="display:none">
-      <div class="card-title">How did you disposition this call?</div>
-      <p class="muted-small" style="margin-bottom:16px">Log it the same way you would in the planner app after a real call.</p>
-      <label>Disposition</label>
-      <select id="disposition-select">
-        <option value="">Select outcome...</option>
-        <option value="appointment_set">Appointment Set</option>
-        <option value="callback_scheduled">Callback Scheduled</option>
-        <option value="not_interested">Not Interested</option>
-        <option value="no_answer">No Answer / Voicemail</option>
-        <option value="send_info_only">Info Requested, No Appointment</option>
-        <option value="do_not_call">Do Not Call</option>
-        <option value="other">Other</option>
-      </select>
-      <label>Notes on how it went</label>
-      <textarea id="disposition-notes" rows="3" placeholder="What happened, what you'd log for the next rep who calls this family..."></textarea>
-      <label>Photo of the notes you took during the call</label>
-      <div class="upload-zone" id="photo-upload-zone" onclick="document.getElementById('notes-photo-input').click()">
-        <div class="upload-icon">📷</div>
-        <div class="upload-text" id="photo-upload-text">Tap to take a photo or choose an image</div>
+    <!-- Step: planner (appointment vs result/disposition) -->
+    <div class="card" id="planner-card" style="display:none">
+      <div class="card-title">Log this call</div>
+      <div class="lead-banner">
+        <div>
+          <div class="lead-banner-name" id="planner-lead-name"></div>
+          <div class="lead-banner-sub">Lead</div>
+        </div>
       </div>
-      <input type="file" id="notes-photo-input" accept="image/*" capture="environment" style="display:none" onchange="handlePhotoSelect(event)">
-      <img id="notes-preview-img" class="notes-preview" style="display:none">
-      <div class="error-box" id="disposition-error"></div>
-      <button class="btn btn-primary" style="margin-top:16px" onclick="submitDisposition()" id="submit-disposition-btn">Submit & Get Score</button>
+
+      <div class="planner-tabs">
+        <div class="planner-tab" id="tab-appointment" onclick="selectPlannerPath('appointment')">
+          <div class="planner-tab-title">📅 Set Appointment</div>
+          <div class="planner-tab-sub">I scheduled a meeting</div>
+        </div>
+        <div class="planner-tab" id="tab-result" onclick="selectPlannerPath('result')">
+          <div class="planner-tab-title">📋 Log Result</div>
+          <div class="planner-tab-sub">No appointment — disposition the call</div>
+        </div>
+      </div>
+
+      <!-- Appointment form -->
+      <div id="appointment-form" style="display:none">
+        <label>Person You Talked To *</label>
+        <input type="text" id="apt-person-talked-to" placeholder="e.g. the lead, their spouse...">
+
+        <label>Location *</label>
+        <select id="apt-location">
+          <option value="">Select...</option>
+          <option value="Funeral Home">Funeral Home</option>
+          <option value="Client Home">Client Home</option>
+          <option value="Other">Other</option>
+        </select>
+
+        <label>Starts At *</label>
+        <select id="apt-time"></select>
+
+        <label>Attendee Info *</label>
+        <div class="radio-group" id="apt-attendee-group">
+          <label class="radio-option"><input type="radio" name="apt-attendee" value="Partner Attending"> Partner Attending</label>
+          <label class="radio-option"><input type="radio" name="apt-attendee" value="Single"> Single</label>
+          <label class="radio-option"><input type="radio" name="apt-attendee" value="Partner not Attending"> Partner not Attending</label>
+        </div>
+
+        <label>Phone</label>
+        <div class="phone-row">
+          <input type="text" class="phone-part" id="apt-phone-1" readonly>
+          <input type="text" class="phone-part" id="apt-phone-2" readonly>
+          <input type="text" class="phone-part" id="apt-phone-3" readonly>
+        </div>
+        <label class="verify-check"><input type="checkbox" id="apt-phone-verified"> Verified — I confirmed this number with the lead on the call *</label>
+
+        <label>Most Important Reason</label>
+        <input type="text" id="apt-important-reason" placeholder="What matters most to them about pre-planning...">
+
+        <label>Confirmer Notes</label>
+        <textarea id="apt-confirmer-notes" rows="2" placeholder="Notes for whoever confirms this appointment..."></textarea>
+
+        <label>AFP Notes</label>
+        <textarea id="apt-afp-notes" rows="2" placeholder="Notes for the advisor running the appointment..."></textarea>
+
+        <div class="error-box" id="apt-error"></div>
+        <button class="btn btn-primary" style="margin-top:8px" onclick="submitAppointment()" id="apt-submit-btn">Set Appointment</button>
+      </div>
+
+      <!-- Result / disposition form -->
+      <div id="result-form" style="display:none">
+        <p class="muted-small" style="margin-bottom:14px">Pick the outcome that matches how the call actually went.</p>
+        <div class="result-columns">
+          <div>
+            <div class="result-col-header answer">Answer</div>
+            <div class="result-col-body" id="result-col-answer"></div>
+          </div>
+          <div>
+            <div class="result-col-header noanswer">No Answer</div>
+            <div class="result-col-body" id="result-col-noanswer"></div>
+          </div>
+          <div>
+            <div class="result-col-header other">Other</div>
+            <div class="result-col-body" id="result-col-other"></div>
+          </div>
+        </div>
+
+        <div class="result-panel" id="result-panel" style="display:none">
+          <label>Result</label>
+          <select id="result-dropdown"></select>
+
+          <label>Notes</label>
+          <textarea id="result-notes" rows="2" placeholder="What happened on the call..."></textarea>
+
+          <label>Callback</label>
+          <div class="callback-toggle">
+            <div class="callback-option selected" id="callback-queue-btn" onclick="setCallbackType('queue')">Queue</div>
+            <div class="callback-option" id="callback-scheduled-btn" onclick="setCallbackType('scheduled')">Scheduled</div>
+          </div>
+
+          <div id="callback-queue-section">
+            <label>What day to put back in Queue?</label>
+            <select id="callback-queue-day">
+              <option value="Auto">Auto</option>
+              <option value="Today">Today</option>
+              <option value="Tomorrow">Tomorrow</option>
+              <option value="2 Days">2 Days</option>
+              <option value="3 Days">3 Days</option>
+              <option value="4 Days">4 Days</option>
+              <option value="5 Days">5 Days</option>
+              <option value="6 Days">6 Days</option>
+              <option value="1 Week">1 Week</option>
+              <option value="2 Weeks">2 Weeks</option>
+              <option value="3 Weeks">3 Weeks</option>
+              <option value="1 Month">1 Month</option>
+              <option value="2 Months">2 Months</option>
+              <option value="3 Months">3 Months</option>
+            </select>
+          </div>
+
+          <div id="callback-scheduled-section" style="display:none">
+            <div class="time-select-grid">
+              <div>
+                <label>Date</label>
+                <input type="date" id="callback-sched-date">
+              </div>
+              <div>
+                <label>Time</label>
+                <select id="callback-sched-time"></select>
+              </div>
+            </div>
+          </div>
+
+          <div class="error-box" id="result-error"></div>
+          <button class="btn btn-primary" style="margin-top:8px" onclick="submitResult()" id="result-submit-btn">Result</button>
+        </div>
+      </div>
+
+      <!-- Shared: notes photo (applies to either path) -->
+      <div style="margin-top:24px;padding-top:20px;border-top:1px solid var(--border)">
+        <label>Photo of the notes you took during the call (optional)</label>
+        <div class="upload-zone" id="photo-upload-zone" onclick="document.getElementById('notes-photo-input').click()">
+          <div class="upload-icon">📷</div>
+          <div class="upload-text" id="photo-upload-text">Tap to take a photo or choose an image</div>
+        </div>
+        <input type="file" id="notes-photo-input" accept="image/*" capture="environment" style="display:none" onchange="handlePhotoSelect(event)">
+        <img id="notes-preview-img" class="notes-preview" style="display:none">
+      </div>
     </div>
+
+    <!-- Step: disposition capture (legacy, superseded by planner-card above) -->
 
     <!-- Progress -->
     <div class="progress-wrap" id="progress-wrap">
@@ -590,11 +748,123 @@ async function getPersonaReply() {
 function endCallManually() {
   if (conversationHistory.length === 0) { alert('Have at least one exchange before ending the call.'); return; }
   document.getElementById('call-card').style.display = 'none';
-  document.getElementById('disposition-card').style.display = 'block';
+  setupPlanner();
+  document.getElementById('planner-card').style.display = 'block';
 }
 
 // ═══════════════════════════════════════════════════════════
-// DISPOSITION CAPTURE
+// PLANNER: shared setup
+// ═══════════════════════════════════════════════════════════
+const RESULT_CATEGORIES = {
+  answer: ['Requested Callback', 'Non-English', 'Out-of-range', 'Wrong Number', 'Not Interested', 'Survey Only', 'Send Info by Mail', 'Send Info by Email'],
+  noanswer: ['No Answer', 'Busy', 'Disconnected', 'Unreachable', 'No Answer - Left Voicemail'],
+  other: ['Skip', 'Open Task', 'Calendar Full', 'Appointment Override', 'OAP Funded', 'Executor Assist Funded'],
+};
+
+let selectedAptTime = null;
+let selectedResultValue = null;
+let callbackType = 'queue';
+
+function timeOptionsList() {
+  const opts = [];
+  const slots = [
+    ['9:00 AM','9:30 AM','10:00 AM','10:30 AM','11:00 AM','11:30 AM'],
+    ['12:00 PM','12:30 PM','1:00 PM','1:30 PM','2:00 PM','2:30 PM','3:00 PM','3:30 PM','4:00 PM','4:30 PM','5:00 PM','5:30 PM','6:00 PM','6:30 PM','7:00 PM','7:30 PM','8:00 PM','8:30 PM'],
+  ];
+  slots.forEach(group => group.forEach(t => opts.push(t)));
+  return opts;
+}
+
+function populateTimeSelect(selectEl) {
+  selectEl.innerHTML = timeOptionsList().map(t => `<option value="${t}">${t}</option>`).join('');
+}
+
+function setupPlanner() {
+  document.getElementById('planner-lead-name').textContent = activeModule.persona_name;
+
+  // Reset both forms to a clean state each time
+  document.getElementById('tab-appointment').classList.remove('active');
+  document.getElementById('tab-result').classList.remove('active');
+  document.getElementById('appointment-form').style.display = 'none';
+  document.getElementById('result-form').style.display = 'none';
+  document.getElementById('result-panel').style.display = 'none';
+  document.getElementById('apt-person-talked-to').value = '';
+  document.getElementById('apt-location').value = '';
+  document.getElementById('apt-important-reason').value = '';
+  document.getElementById('apt-confirmer-notes').value = '';
+  document.getElementById('apt-afp-notes').value = '';
+  document.getElementById('apt-phone-verified').checked = false;
+  document.querySelectorAll('input[name="apt-attendee"]').forEach(r => r.checked = false);
+  document.getElementById('result-notes').value = '';
+  document.getElementById('notes-preview-img').style.display = 'none';
+  document.getElementById('notes-photo-input').value = '';
+  document.getElementById('apt-error').style.display = 'none';
+  document.getElementById('result-error').style.display = 'none';
+  selectedResultValue = null;
+  callbackType = 'queue';
+
+  // Phone: split the module's stable fake number into 3 display parts
+  const phone = (activeModule.fake_phone || '000-000-0000').split('-');
+  document.getElementById('apt-phone-1').value = phone[0] || '';
+  document.getElementById('apt-phone-2').value = phone[1] || '';
+  document.getElementById('apt-phone-3').value = phone[2] || '';
+
+  // Time selects
+  populateTimeSelect(document.getElementById('apt-time'));
+  populateTimeSelect(document.getElementById('callback-sched-time'));
+
+  // Attendee radio highlighting
+  document.querySelectorAll('#apt-attendee-group input[name="apt-attendee"]').forEach(input => {
+    input.onchange = () => {
+      document.querySelectorAll('#apt-attendee-group .radio-option').forEach(el => el.classList.remove('selected'));
+      input.closest('.radio-option').classList.add('selected');
+    };
+  });
+
+  // Result category grid
+  ['answer', 'noanswer', 'other'].forEach(cat => {
+    const container = document.getElementById('result-col-' + cat);
+    container.innerHTML = RESULT_CATEGORIES[cat].map(opt =>
+      `<div class="result-option" data-value="${opt}" onclick="pickResultOption('${opt.replace(/'/g,"\\'")}')">${opt}</div>`
+    ).join('');
+  });
+
+  // Result dropdown — flat list of everything, in the same grouped order
+  const allOptions = [...RESULT_CATEGORIES.answer, ...RESULT_CATEGORIES.noanswer, ...RESULT_CATEGORIES.other];
+  document.getElementById('result-dropdown').innerHTML = allOptions.map(o => `<option value="${o}">${o}</option>`).join('');
+  document.getElementById('result-dropdown').onchange = (e) => pickResultOption(e.target.value, true);
+
+  setCallbackType('queue');
+}
+
+function selectPlannerPath(path) {
+  document.getElementById('tab-appointment').classList.toggle('active', path === 'appointment');
+  document.getElementById('tab-result').classList.toggle('active', path === 'result');
+  document.getElementById('appointment-form').style.display = path === 'appointment' ? 'block' : 'none';
+  document.getElementById('result-form').style.display = path === 'result' ? 'block' : 'none';
+}
+
+function pickResultOption(value, fromDropdown) {
+  selectedResultValue = value;
+  document.querySelectorAll('.result-option').forEach(el => el.classList.toggle('selected', el.dataset.value === value));
+  document.getElementById('result-dropdown').value = value;
+  document.getElementById('result-panel').style.display = 'block';
+}
+
+function setCallbackType(type) {
+  callbackType = type;
+  document.getElementById('callback-queue-btn').classList.toggle('selected', type === 'queue');
+  document.getElementById('callback-scheduled-btn').classList.toggle('selected', type === 'scheduled');
+  document.getElementById('callback-queue-section').style.display = type === 'queue' ? 'block' : 'none';
+  document.getElementById('callback-scheduled-section').style.display = type === 'scheduled' ? 'block' : 'none';
+}
+
+function slugify(s) {
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+}
+
+// ═══════════════════════════════════════════════════════════
+// PLANNER: shared photo upload + transcript + scoring submission
 // ═══════════════════════════════════════════════════════════
 function handlePhotoSelect(event) {
   const file = event.target.files[0];
@@ -621,16 +891,62 @@ async function uploadNotesPhoto() {
   return sb.storage.from('training-notes-photos').getPublicUrl(path).data?.publicUrl || null;
 }
 
-async function submitDisposition() {
-  const disposition = document.getElementById('disposition-select').value;
-  const notesText = document.getElementById('disposition-notes').value.trim();
-  const errBox = document.getElementById('disposition-error');
+async function submitAppointment() {
+  const errBox = document.getElementById('apt-error');
   errBox.style.display = 'none';
 
-  if (!disposition) { errBox.textContent = 'Select how you dispositioned the call.'; errBox.style.display = 'block'; return; }
+  const personTalkedTo = document.getElementById('apt-person-talked-to').value.trim();
+  const location = document.getElementById('apt-location').value;
+  const startsAt = document.getElementById('apt-time').value;
+  const attendee = document.querySelector('input[name="apt-attendee"]:checked');
+  const verified = document.getElementById('apt-phone-verified').checked;
 
-  document.getElementById('submit-disposition-btn').disabled = true;
-  document.getElementById('disposition-card').style.display = 'none';
+  if (!personTalkedTo) { errBox.textContent = 'Enter who you talked to.'; errBox.style.display = 'block'; return; }
+  if (!location) { errBox.textContent = 'Select a location.'; errBox.style.display = 'block'; return; }
+  if (!attendee) { errBox.textContent = 'Select attendee info.'; errBox.style.display = 'block'; return; }
+  if (!verified) { errBox.textContent = 'Confirm the phone number was verified.'; errBox.style.display = 'block'; return; }
+
+  const formJson = {
+    type: 'appointment',
+    person_talked_to: personTalkedTo,
+    location,
+    starts_at: startsAt,
+    attendee_info: attendee.value,
+    phone: `${document.getElementById('apt-phone-1').value}-${document.getElementById('apt-phone-2').value}-${document.getElementById('apt-phone-3').value}`,
+    phone_verified: verified,
+    most_important_reason: document.getElementById('apt-important-reason').value.trim(),
+    confirmer_notes: document.getElementById('apt-confirmer-notes').value.trim(),
+    afp_notes: document.getElementById('apt-afp-notes').value.trim(),
+  };
+  const notesTextSummary = [formJson.most_important_reason, formJson.confirmer_notes].filter(Boolean).join(' — ');
+
+  await submitToScoring('appointment_set', notesTextSummary, formJson, document.getElementById('apt-submit-btn'), errBox);
+}
+
+async function submitResult() {
+  const errBox = document.getElementById('result-error');
+  errBox.style.display = 'none';
+
+  if (!selectedResultValue) { errBox.textContent = 'Pick an outcome above.'; errBox.style.display = 'block'; return; }
+
+  const notes = document.getElementById('result-notes').value.trim();
+  const formJson = {
+    type: 'result',
+    result: selectedResultValue,
+    notes,
+    callback_type: callbackType,
+    callback_queue_choice: callbackType === 'queue' ? document.getElementById('callback-queue-day').value : null,
+    callback_scheduled_at: callbackType === 'scheduled'
+      ? `${document.getElementById('callback-sched-date').value || ''} ${document.getElementById('callback-sched-time').value || ''}`.trim()
+      : null,
+  };
+
+  await submitToScoring(slugify(selectedResultValue), notes, formJson, document.getElementById('result-submit-btn'), errBox);
+}
+
+async function submitToScoring(dispositionReported, dispositionNotesText, dispositionFormJson, submitBtn, errBox) {
+  submitBtn.disabled = true;
+  document.getElementById('planner-card').style.display = 'none';
   document.getElementById('progress-wrap').style.display = 'block';
   setProgress(15, 'Uploading your notes photo...');
 
@@ -646,7 +962,7 @@ async function submitDisposition() {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         repId, team: repTeam, moduleId: activeModule.id, transcript,
-        dispositionReported: disposition, dispositionNotesText: notesText, notesPhotoUrl,
+        dispositionReported, dispositionNotesText, notesPhotoUrl, dispositionFormJson,
       }),
     });
     const startData = await startRes.json();
@@ -660,7 +976,7 @@ async function submitDisposition() {
         jobId, attemptId, repId, team: repTeam, moduleId: activeModule.id,
         moduleTitle: activeModule.title, objectionType: activeModule.objection_type,
         difficulty: activeModule.difficulty, passThreshold: activeModule.pass_threshold,
-        transcript, dispositionReported: disposition, dispositionNotesText: notesText, notesPhotoUrl,
+        transcript, dispositionReported, dispositionNotesText, notesPhotoUrl,
       }),
     }).catch(() => {});
 
@@ -684,10 +1000,10 @@ async function submitDisposition() {
 
   } catch (err) {
     document.getElementById('progress-wrap').style.display = 'none';
-    document.getElementById('disposition-card').style.display = 'block';
+    document.getElementById('planner-card').style.display = 'block';
     errBox.textContent = 'Error: ' + err.message;
     errBox.style.display = 'block';
-    document.getElementById('submit-disposition-btn').disabled = false;
+    submitBtn.disabled = false;
   }
 }
 
@@ -825,6 +1141,7 @@ async function openRepAttempts(rep) {
         </div>
         <p class="muted-small">${new Date(a.created_at).toLocaleString()} · Disposition: ${a.disposition_reported || '—'} ${a.disposition_match_score != null ? `· Match ${a.disposition_match_score}/10` : ''}</p>
         ${a.disposition_feedback ? `<p style="font-size:12px;color:var(--muted2);margin-top:6px">${a.disposition_feedback}</p>` : ''}
+        ${renderPlannerDetail(a.disposition_form_json)}
         ${a.notes_photo_url ? `<img src="${a.notes_photo_url}" style="max-width:100%;max-height:160px;border-radius:8px;margin-top:8px;border:1px solid var(--border)">` : ''}
         <details style="margin-top:8px"><summary style="cursor:pointer;font-size:12px;color:var(--muted2)">Transcript</summary><pre style="white-space:pre-wrap;font-size:12px;color:var(--muted2);margin-top:8px">${escapeHtml(a.transcript || '')}</pre></details>
       </div>`;
@@ -832,6 +1149,33 @@ async function openRepAttempts(rep) {
     <button class="btn btn-ghost" onclick="closeAttemptModal()">Close</button>
   `;
   modal.style.display = 'flex';
+}
+
+// Renders the structured planner-form detail (appointment or result path) —
+// manager-review only, not AI-graded (per the plan: capture the data, don't score it yet).
+function renderPlannerDetail(json) {
+  if (!json) return '';
+  if (json.type === 'appointment') {
+    return `
+      <div style="background:var(--surface2);border-radius:8px;padding:10px 12px;margin-top:8px;font-size:12px;color:var(--muted2);line-height:1.6">
+        <strong style="color:var(--text)">Appointment set</strong> — ${escapeHtml(json.person_talked_to||'')} · ${escapeHtml(json.location||'')} · ${escapeHtml(json.starts_at||'')} · ${escapeHtml(json.attendee_info||'')}<br>
+        Phone: ${escapeHtml(json.phone||'')} ${json.phone_verified ? '✓ verified' : '(not verified)'}<br>
+        ${json.most_important_reason ? `Most important reason: ${escapeHtml(json.most_important_reason)}<br>` : ''}
+        ${json.confirmer_notes ? `Confirmer notes: ${escapeHtml(json.confirmer_notes)}<br>` : ''}
+        ${json.afp_notes ? `AFP notes: ${escapeHtml(json.afp_notes)}` : ''}
+      </div>`;
+  }
+  if (json.type === 'result') {
+    const callback = json.callback_type === 'scheduled'
+      ? `Scheduled callback: ${escapeHtml(json.callback_scheduled_at||'—')}`
+      : `Queue: ${escapeHtml(json.callback_queue_choice||'—')}`;
+    return `
+      <div style="background:var(--surface2);border-radius:8px;padding:10px 12px;margin-top:8px;font-size:12px;color:var(--muted2);line-height:1.6">
+        <strong style="color:var(--text)">Result: ${escapeHtml(json.result||'')}</strong> — ${callback}<br>
+        ${json.notes ? `Notes: ${escapeHtml(json.notes)}` : ''}
+      </div>`;
+  }
+  return '';
 }
 
 function closeAttemptModal() { document.getElementById('attempt-modal').style.display = 'none'; }
