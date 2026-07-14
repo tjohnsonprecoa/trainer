@@ -31,38 +31,72 @@ const MODEL = 'gpt-realtime-2.1';
 // Backstories matching the real call script's three lead sources — these
 // tell the persona WHY this call is happening / what they supposedly did
 // before it, so their reactions make sense given how the script frames it.
-// Keep these in sync with the LEAD_SOURCES config in index.html.
+// Deliberately vague about the Final Wishes Organizer specifically — most
+// real leads don't clearly remember requesting it, and none already know
+// pre-planning/benefits details walking in. Keep in sync with LEAD_SOURCES
+// in index.html.
 const LEAD_SOURCE_BACKSTORY = {
-  direct_mail: 'BACKSTORY: You (or your spouse) recently received something in the mail about pre-planning and a "Final Wishes Organizer" — you filled it out and mailed it back requesting more information. That is why this rep is calling you today.',
-  internet: 'BACKSTORY: You (or your spouse) recently filled out a form on a funeral home\'s website requesting pre-planning information and a "Final Wishes Organizer." That is why this rep is calling you today.',
-  veterans: 'BACKSTORY: You are a veteran (or a close family member of one), and you recently requested information through a "Veterans Memorial Program" about pre-planning and veterans\' burial benefits, along with a "Final Wishes Organizer." That is why this rep is calling you today. You may or may not already know much about the VA burial benefits you could be entitled to.',
+  direct_mail: 'BACKSTORY: You (or your spouse) filled out and mailed back something related to pre-planning at some point — but you don\'t clearly remember the details. If the rep mentions a "Final Wishes Organizer" by name, don\'t confirm you know exactly what that is; respond vaguely ("I think we got something in the mail, I don\'t really remember" or similar). You do NOT already have any pre-planning information — whatever the rep explains today is new to you.',
+  internet: 'BACKSTORY: You (or your spouse) filled out a form online at some point requesting information — but you don\'t clearly remember the specifics of what you requested. If the rep mentions a "Final Wishes Organizer" by name, respond vaguely rather than confirming you remember it clearly. You do NOT already have any pre-planning information — whatever the rep explains today is new to you.',
+  veterans: 'BACKSTORY: You are a veteran (or a close family member of one), and you recall reaching out about veterans\' benefits at some point — but you don\'t remember the details clearly, and you do NOT already know what those VA burial benefits actually are. If the rep mentions a "Final Wishes Organizer," respond vaguely rather than confirming you remember it. Everything about pre-planning and the benefits is new information to you on this call.',
 };
 
-// How forthcoming the prospect is with information, scaled by module tier —
-// layered ON TOP of each persona's specific objection-handling instructions
-// (which already escalate per tier in the stored persona_prompt). This is a
-// separate axis: general conversational openness, not the specific objection.
-const TIER_OPENNESS = {
-  1: 'CONVERSATIONAL OPENNESS: You are warm and open. Answer questions honestly and don\'t make the rep work hard to get basic information from you. This is a FUNDAMENTALS call — your objection is a light, surface-level hesitation (a smokescreen), not a deep-seated resistance. A reasonable, competent attempt at addressing it should be enough to move you past it.',
-  2: 'CONVERSATIONAL OPENNESS: You are somewhat reserved by default. Give shorter, surface-level answers initially — don\'t volunteer extra detail unprompted. Only elaborate or open up more if the rep asks a good, specific follow-up question that shows they were actually listening to what you said. Vague, generic, or rushed questions get vague, minimal answers back.',
-  3: 'CONVERSATIONAL OPENNESS: You are guarded and fairly closed-off by default. Give brief, non-committal answers unless the rep genuinely earns more from you — by asking thoughtful, specific, well-paced questions, actively listening and reflecting back what you said, and not rushing the conversation. If the rep sounds scripted, rushes through the call, asks shallow or generic questions, or doesn\'t seem to really be listening, stay closed off and reluctant to share more than the minimum.',
-};
+// The core mechanic across every difficulty level: closed off by default,
+// genuinely warms up (and becomes noticeably easier to persuade) only if the
+// rep builds real rapport — not just politeness, but actual human connection.
+const RAPPORT_GATE = `RAPPORT GATE (applies at every difficulty level): Start every call somewhat guarded — this is normal for a real person getting an unexpected call about a sensitive topic. Don't share much beyond short, polite answers at first. If, over the course of the call, the rep genuinely builds rapport with you — showing real warmth, empathy, active listening, patience, and not rushing you or sounding scripted — progressively open up: share more, be more relaxed, and become noticeably EASIER to persuade. If the rep stays transactional, rushed, robotic, or scripted-sounding and never actually connects with you as a person, stay guarded for the whole call and be harder to move, regardless of difficulty level. Rapport-building is not the same as just being polite — it has to feel like the rep actually cares and is listening, not just following steps.`;
 
-// The persona's decision to schedule an appointment should NOT be a simple
-// function of "did they overcome my objection" — but HOW HIGH that bar is
-// must scale with tier. Tier 1 is deliberately easy (a rep just competently
-// working the script should succeed); tier 3 genuinely requires the rep to
-// build real value through good questions and a natural conversation.
-const TIER_SCHEDULING_GATE = {
-  1: `APPOINTMENT SCHEDULING GATE (tier 1 — easy): Your objection is a light, easy-to-overcome smokescreen, not real resistance. If the rep is polite, roughly follows the call's natural flow (introduces themselves and the funeral home, asks why you reached out, explains the Final Wishes Organizer, proposes an appointment), and gives any reasonable response to your objection, agree to schedule. Don't hold out for a perfect performance or deep discovery questions at this tier — the goal here is for a newer rep to succeed by simply running the script competently. Only refuse to schedule if the rep is genuinely rude, completely ignores your objection without any response, or is wildly off-script (e.g. never explains why they're calling at all).`,
-  2: `APPOINTMENT SCHEDULING GATE (tier 2 — moderate): Don't schedule just because the rep asked or because you ran out of pushback. Form a real judgment: did they have a reasonably natural conversation (not robotic or rushed), generally follow a sensible structure (intro → your motivation/reason for reaching out → Final Wishes Organizer → appointment ask), and ask at least ONE genuinely specific follow-up question that shows they were listening, not just reciting lines? If yes, you can be persuaded even through your objection. If they skipped these, rushed the ask, or never asked you anything specific, stay hesitant or decline.`,
-  3: `APPOINTMENT SCHEDULING GATE (tier 3 — hard): This is the hardest tier — you should NOT be easy to convince. Don't schedule unless the rep clearly earns it: a natural, unhurried, human conversation; solid adherence to a sensible call structure; AND multiple genuinely good, specific discovery questions over the course of the call that build real value and show real listening (not just one token question). If the rep rushes, sounds scripted, asks only shallow/generic questions, or tries to close too early, stay firmly hesitant, non-committal, or decline to schedule — even if they technically addressed your stated objection. Make them work for it, the way a real skeptical or guarded prospect would.`,
-};
+// Difficulty is a continuous 1-9 scale, randomly rolled per attempt within
+// each tier's band (tier 1 = 1-2, tier 2 = 3-5, tier 3 = 6-9), rather than
+// one fixed description per tier — this gives real variation WITHIN a tier
+// (a level-5 call should feel harder than a level-3 call, even though both
+// are "tier 2"), while keeping the overall band difficulty where it belongs.
+//
+// The three-way outcome (schedule / accept a callback / decline) is
+// deliberate: a callback is a legitimate, ACCEPTABLE resolution when the rep
+// did a reasonable-but-not-exceptional job — it is not a failure state, and
+// personas should feel free to land there rather than treating every call as
+// binary schedule-or-bust.
+function describeDifficulty(level) {
+  const lvl = Math.max(1, Math.min(9, Number(level) || 1));
+
+  if (lvl <= 2) {
+    return `DIFFICULTY LEVEL: ${lvl} of 9 (easy band, levels 1-2).
+CONVERSATIONAL OPENNESS: You start only mildly guarded and open up almost immediately once the rep shows basic warmth and courtesy — you're not an open book from word one, but you don't make them work hard either. Your objection is a light smokescreen, not real resistance.
+APPOINTMENT OUTCOME GATE: If the rep is polite, roughly follows a sensible call flow (intro → reason for reaching out → Final Wishes Organizer → appointment ask), and gives any reasonable response to your objection, agree to schedule a full appointment. Don't hold out for deep discovery questions at this level. Only decline or fall back to "just call me back" if the rep is genuinely rude, ignores your objection entirely, or is wildly off-script.`;
+  }
+
+  if (lvl <= 5) {
+    const followUps = lvl - 2; // 1, 2, or 3 as level goes 3, 4, 5
+    return `DIFFICULTY LEVEL: ${lvl} of 9 (moderate band, levels 3-5).
+CONVERSATIONAL OPENNESS: You are reserved by default — short, surface-level answers, nothing volunteered unprompted. You open up only as the rep genuinely builds rapport and asks specific, thoughtful follow-up questions. The higher this number within the moderate band, the more genuine warmth and good questions it takes before you loosen up.
+APPOINTMENT OUTCOME GATE: Don't schedule on politeness alone. Over the call, the rep should ask at least ${followUps} genuinely specific, good follow-up question${followUps > 1 ? 's' : ''} — showing they were actually listening, not reciting lines — and hold a reasonably natural, unhurried conversation before you're persuaded to schedule a FULL appointment. If they fall a bit short of that but were still respectful and reasonably competent, agreeing to a CALLBACK (or to receive more information, to be followed up with later) instead of a firm appointment is a realistic, ACCEPTABLE outcome here — that is not a failure, it's what a real moderately-convinced person would actually do. Only end the call with a firm decline if the rep did a poor job overall.`;
+  }
+
+  const followUps = lvl - 3; // 3,4,5,6 as level goes 6,7,8,9
+  return `DIFFICULTY LEVEL: ${lvl} of 9 (hard band, levels 6-9).
+CONVERSATIONAL OPENNESS: You are guarded and closed-off by default. You only meaningfully open up if the rep builds real, genuine rapport — true warmth, active listening, patience — not just politeness or a scripted-sounding approach. The higher this number within the hard band, the more real connection and skill it takes before you loosen up at all.
+APPOINTMENT OUTCOME GATE: This is a hard call — do not make it easy. Only agree to a FULL appointment if the rep clearly earns it: genuine rapport, a natural unhurried conversation, and multiple (around ${followUps}) genuinely excellent, specific discovery questions over the course of the call. If the rep does a reasonably good job but doesn't fully clear that bar, agreeing to a CALLBACK or to think it over and be recontacted later is a realistic and ACCEPTABLE outcome — that is not a failure state, it's exactly what a real skeptical or guarded prospect would do for a decent-but-not-exceptional call. Reserve an outright decline for when the rep did a genuinely poor job — rude, ignored your objection entirely, wildly off-script, or never built any rapport at all.`;
+}
 
 // Real prospects don't manufacture an endless stream of new objections —
 // they raise the same concern once or twice, maybe rephrase it, and then
-// make a decisive move: soften and continue, or shut the conversation down.
-const OBJECTION_CYCLE_CAP = `OBJECTION PACING (important for realism): Only raise your objection, or a natural rephrasing of it, up to about 1-3 times total over the course of the call — don't keep manufacturing fresh objections indefinitely. After raising it that many times, make a decisive choice: either soften and let the conversation move forward (if the rep's handling of it and the call overall clears the scheduling gate below for this tier), or firmly and politely wrap up / end the call if it hasn't. Real people resolve one way or the other; they don't stall forever.`;
+// make a decisive move: soften and continue, agree to a callback, or shut
+// the conversation down. All three are legitimate resolutions.
+const OBJECTION_CYCLE_CAP = `OBJECTION PACING (important for realism): Only raise your objection, or a natural rephrasing of it, up to about 1-3 times total over the course of the call — don't keep manufacturing fresh objections indefinitely. After raising it that many times, make a decisive choice based on the difficulty gate above: schedule a full appointment, agree to a callback (a legitimate middle outcome, not a failure), or firmly and politely end the call. Real people resolve one way or another; they don't stall forever.`;
+
+// "Already taken care of" claims (has-will / has-plans objection type):
+// most real families who say this only mean a basic will or life insurance
+// — NOT an actual funeral home pre-need plan. A good rep has to clarify
+// which one it is before treating the objection as resolved. Occasionally
+// (rare, at your own discretion) it's genuinely the latter — and in that
+// case scheduling really isn't appropriate, which is exactly the scenario
+// the scoring rubric checks for as a red flag.
+const HAS_PLANS_CLARIFICATION = `"ALREADY TAKEN CARE OF" CLAIMS (special instruction): When you say things are "already taken care of" or "we already have a plan," be deliberately vague about what that actually means at first — don't specify whether it's a will, a life insurance policy, or an actual pre-arranged plan with a funeral home. Make the rep ask a clarifying question (e.g. "when you say taken care of, do you mean you've already met with a specific funeral home and set up payments toward a pre-arranged plan, or is that more about a will or a life insurance policy?") before you clarify what you actually meant.
+
+MOST OF THE TIME (the common, realistic case): once asked, reveal that it's really just a will and/or a life insurance policy — not an actual funeral home pre-need plan. That distinction is the rep's job to draw out and explain; once they do, you can be reasonably persuaded to still consider an appointment (subject to the scheduling gate above).
+
+RARELY (occasionally, at your own realistic discretion, and ONLY reveal this if the rep asks a genuinely specific clarifying question): you may instead be a case where you are ALREADY genuinely and legitimately covered — you've already met with a specific funeral home and are already making payments toward a real pre-arranged plan. In that rare case, don't volunteer this upfront; only reveal it if directly and specifically asked. If the rep never asks and just pushes ahead to schedule an appointment anyway without ever clarifying what "taken care of" meant, let them schedule it if your normal scheduling gate is otherwise met — a real person in this situation might go along with it politely rather than argue — but this is exactly the kind of miss a good rep should have caught.`;
 
 exports.handler = async (event) => {
   const cors = {
@@ -80,14 +114,14 @@ exports.handler = async (event) => {
   }
 
   try {
-    const { personaPrompt, gender, fhName, fhPronunciation, afpName, leadSource, tier } = JSON.parse(event.body);
+    const { personaPrompt, gender, fhName, fhPronunciation, afpName, leadSource, difficultyLevel, objectionType } = JSON.parse(event.body);
     if (!personaPrompt) return { statusCode: 400, headers: { 'Content-Type': 'application/json', ...cors },
       body: JSON.stringify({ error: 'Missing personaPrompt' }) };
 
     const voice = VOICE_MAP[gender] || 'alloy';
     const backstory = LEAD_SOURCE_BACKSTORY[leadSource] || '';
-    const openness = TIER_OPENNESS[tier] || TIER_OPENNESS[1];
-    const schedulingGate = TIER_SCHEDULING_GATE[tier] || TIER_SCHEDULING_GATE[1];
+    const difficultyDesc = describeDifficulty(difficultyLevel);
+    const hasPlansNote = (objectionType === 'has-will' || objectionType === 'has-plans') ? HAS_PLANS_CLARIFICATION : '';
     const fhLine = fhName
       ? `The rep calling you is from ${fhName}${fhPronunciation ? ` (pronounced "${fhPronunciation}")` : ''}. If you refer to the funeral home by name during the call, pronounce it correctly using that guide.`
       : '';
@@ -105,11 +139,13 @@ ${backstory}
 ${fhLine}
 ${afpLine}
 
-${openness}
+${difficultyDesc}
+
+${RAPPORT_GATE}
 
 ${OBJECTION_CYCLE_CAP}
 
-${schedulingGate}
+${hasPlansNote}
 
 IMPORTANT — ignore any instruction above about JSON, "call_status", or response formatting. This is a LIVE SPOKEN PHONE CONVERSATION over real-time voice. Just speak your dialogue naturally out loud, the way the character actually would on a phone call — never output JSON, never describe stage directions, never mention that you're an AI or that this is a simulation. Keep responses conversational length (a sentence or two at a time, like a real phone call), not monologues.`;
 
