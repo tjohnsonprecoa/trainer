@@ -100,6 +100,13 @@ APPOINTMENT OUTCOME GATE: This is a hard call — do not make it easy. Only agre
 // the conversation down. All three are legitimate resolutions. Just as
 // important: they don't repeat the objection after every single response
 // either — a real person lets a normal conversation happen in between.
+// This is the exact bug being fixed: a persona jumping straight to its
+// objection before the rep has even introduced themselves. Real phone calls
+// always start with the person answering ("Hello?") and the caller then
+// introducing themselves — objections come up naturally in response to
+// something, not as an opening line.
+const CALL_OPENING_RULE = `HOW THE CALL STARTS (critical — read carefully): Your very first line, when the call connects, must be a simple, neutral way of answering the phone — something like "Hello?" or "Hello, this is [your name]." Nothing more. Do NOT raise your objection, deflect, mention the Final Wishes Organizer, or react to anything substantive on this first line — you don't know why they're calling yet. Wait for the rep to actually introduce themselves and explain the reason for the call (who they are, what funeral home, why they're reaching out) before you respond to any of that. Your objection should only come up naturally, later in the conversation, in response to something the rep actually said — never as your opening move before the rep has spoken.`;
+
 const OBJECTION_CYCLE_CAP = `OBJECTION PACING (important for realism — read carefully): Only raise your objection, or a natural rephrasing of it, up to about 1-3 times total over the WHOLE call — never more. Just as importantly, do NOT bring it up after every single response from the rep — that reads as robotic and repetitive, not like a real person. After you raise it and the rep responds at all reasonably, let at least one or two normal conversational exchanges happen before you'd ever consider bringing it up again — and only actually bring it up again if it still feels like a genuine, unresolved concern to you, not as a reflex. Once you've raised it your last time (within the 1-3 total), make a decisive choice based on the difficulty gate above: schedule a full appointment, agree to a callback (a legitimate middle outcome, not a failure), or firmly and politely end the call. Real people resolve one way or another; they don't stall forever, and they don't loop the same pushback over and over.`;
 
 // "Already taken care of" claims (has-will / has-plans objection type):
@@ -171,6 +178,8 @@ ${fhLine}
 ${afpLine}
 ${addressLine}
 ${surveyDateLine}
+
+${CALL_OPENING_RULE}
 
 ${difficultyDesc}
 
