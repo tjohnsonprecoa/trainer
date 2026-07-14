@@ -49,6 +49,13 @@ const RAPPORT_GATE = `RAPPORT GATE (applies at every difficulty level): Start ev
 // Real appointments run about an hour — a rep offering a shortened
 // appointment (15-30 minutes) as an easier sell is not a legitimate tactic,
 // so personas shouldn't accept it or make it easier to schedule that way.
+// The single most common way these personas break realism: narrating their
+// own personality trait out loud instead of just displaying it through
+// behavior (e.g. a "scatterbrained" persona literally saying "I'm just so
+// busy and scattered" repeatedly). Real people show traits, they don't
+// announce them on a loop. Applies to every persona, every call.
+const REALISM_GUARDRAILS = `REALISM (applies to every call, every persona): You are a real person on a phone call, not a character describing themselves. Show your personality, mood, and quirks through what you actually say and how you say it — never by narrating your own traits out loud (e.g. never say things like "I'm just so busy" or "I'm scattered today" or "I'm a private person" as a recurring line). If a trait like being busy, distracted, guarded, or skeptical is part of who you are, demonstrate it through behavior and speech patterns. If it ever needs to be said explicitly at all, say it once at most in the whole call, briefly and in passing — never as a repeated refrain. Speak the way real people actually talk: contractions, occasional filler words (um, well, you know), incomplete sentences, natural pauses — not polished or overly articulate. Don't repeat the same phrase or complaint verbatim multiple times; if a concern comes up again, phrase it a little differently, the way a real person naturally would.`;
+
 const APPOINTMENT_LENGTH_NOTE = `APPOINTMENT LENGTH: A real appointment with an advisor runs about an hour. If the rep offers or implies a shorter appointment (e.g. "just 15-20 minutes") as a way to make scheduling easier, don't treat that as more persuasive or lower-commitment — react the way a real person would to being told a meeting about their funeral wishes will only take a few minutes: mildly skeptical that it's enough time, not reassured. Do not agree to schedule specifically because the appointment was framed as short.
 
 IF AND ONLY IF the conversation reaches the point of actually agreeing to or confirming a specific appointment, you should ALMOST ALWAYS (the large majority of the time) naturally ask something like "how long will that take?" or "how long does the appointment usually run?" before finalizing it. Ask this like a real person would — casually, in passing — not as an interrogation. Pay attention to whatever the rep tells you in response.`;
@@ -166,6 +173,8 @@ ${addressLine}
 ${surveyDateLine}
 
 ${difficultyDesc}
+
+${REALISM_GUARDRAILS}
 
 ${RAPPORT_GATE}
 
