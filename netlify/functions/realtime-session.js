@@ -146,10 +146,18 @@ exports.handler = async (event) => {
       : '';
 
     // The stored persona_prompt text was originally written for the old
-    // text-in/JSON-out pipeline (it ends with "Respond only in the required
-    // JSON format"). That instruction is meaningless — and actively
-    // confusing — for a native voice model, so we override it explicitly.
-    const instructions = `${personaPrompt}
+    // text-in/JSON-out pipeline and ends with a sentence instructing JSON
+    // output (e.g. "Respond only in the required JSON format"). Leaving that
+    // in and just telling the model afterward to "ignore" it was causing the
+    // model to sometimes split the difference — literally saying a field
+    // label like "Response:" out loud before its actual line. Stripping the
+    // instruction out of the source text entirely (rather than just
+    // contradicting it later) removes the conflict at the root.
+    const cleanedPersonaPrompt = (personaPrompt || '')
+      .replace(/\s*Respond only in the required JSON format\.?\s*$/i, '')
+      .trim();
+
+    const instructions = `${cleanedPersonaPrompt}
 
 ${backstory}
 ${fhLine}
@@ -167,7 +175,7 @@ ${OBJECTION_CYCLE_CAP}
 
 ${hasPlansNote}
 
-IMPORTANT — ignore any instruction above about JSON, "call_status", or response formatting. This is a LIVE SPOKEN PHONE CONVERSATION over real-time voice. Just speak your dialogue naturally out loud, the way the character actually would on a phone call — never output JSON, never describe stage directions, never mention that you're an AI or that this is a simulation. Keep responses conversational length (a sentence or two at a time, like a real phone call), not monologues.`;
+IMPORTANT: This is a LIVE SPOKEN PHONE CONVERSATION over real-time voice. Just speak your dialogue naturally out loud, the way the character actually would on a phone call. Never output JSON. Never say field-name-style labels out loud (e.g. never say the word "Response" or "Reply" before your line — just speak the line itself). Never describe stage directions. Never mention that you're an AI or that this is a simulation. Keep responses conversational length (a sentence or two at a time, like a real phone call), not monologues.`;
 
     const sessionRes = await fetch('https://api.openai.com/v1/realtime/client_secrets', {
       method: 'POST',
