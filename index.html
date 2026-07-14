@@ -106,6 +106,7 @@
   .call-info-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); margin-bottom: 2px; }
   .call-info-value { font-weight: 600; font-size: 13px; color: var(--text); }
   .call-info-phonetic { font-size: 11px; color: var(--muted); font-style: italic; margin-top: 2px; }
+  .afp-day-chip { display: inline-block; background: rgba(0,229,160,.12); color: var(--green); border: 1px solid rgba(10,155,111,.3); border-radius: 20px; padding: 5px 12px; font-size: 12px; font-weight: 600; margin: 0 6px 6px 0; }
   @media (min-width: 1300px) {
     .call-info-panel { position: fixed; top: 110px; right: 40px; width: 220px; z-index: 90; }
   }
@@ -288,6 +289,14 @@
         <div class="briefing-label">Advisor (AFP) You'll Reference</div>
         <div class="briefing-value" id="briefing-afp-name"></div>
       </div>
+      <div class="briefing-row">
+        <div class="briefing-label">Lead Address</div>
+        <div class="briefing-value" id="briefing-address"></div>
+      </div>
+      <div class="briefing-row">
+        <div class="briefing-label">Survey Received</div>
+        <div class="briefing-value" id="briefing-survey-date"></div>
+      </div>
       <div class="briefing-opening">
         <div class="briefing-label">Your opening line for this lead source</div>
         <p id="briefing-opening-text"></p>
@@ -312,6 +321,14 @@
         <div class="call-info-label">AFP Name</div>
         <div class="call-info-value" id="info-afp-name"></div>
       </div>
+      <div class="call-info-row">
+        <div class="call-info-label">Lead Address</div>
+        <div class="call-info-value" id="info-address"></div>
+      </div>
+      <div class="call-info-row">
+        <div class="call-info-label">Survey Received</div>
+        <div class="call-info-value" id="info-survey-date"></div>
+      </div>
     </div>
 
     <div class="card" id="call-card" style="display:none">
@@ -333,6 +350,13 @@
 
 
     <!-- Step: planner (appointment vs result/disposition) -->
+    <!-- AFP calendar availability suggestions — shown only for the appointment path -->
+    <div class="call-info-panel" id="afp-availability-panel" style="display:none">
+      <div class="call-info-title">AFP Availability</div>
+      <p class="muted-small" style="margin-bottom:10px">Suggested open days this week — reps have their own calendar view on the real job:</p>
+      <div id="afp-availability-days"></div>
+    </div>
+
     <div class="card" id="planner-card" style="display:none">
       <div class="card-title">Log this call</div>
       <div class="lead-banner">
@@ -366,7 +390,18 @@
           <option value="Other">Other</option>
         </select>
 
-        <label>Starts At *</label>
+        <label>Day *</label>
+        <select id="apt-day">
+          <option value="">Select day...</option>
+          <option value="Monday">Monday</option>
+          <option value="Tuesday">Tuesday</option>
+          <option value="Wednesday">Wednesday</option>
+          <option value="Thursday">Thursday</option>
+          <option value="Friday">Friday</option>
+          <option value="Saturday">Saturday</option>
+        </select>
+
+        <label>Time *</label>
         <select id="apt-time"></select>
 
         <label>Attendee Info *</label>
@@ -375,6 +410,9 @@
           <label class="radio-option"><input type="radio" name="apt-attendee" value="Single"> Single</label>
           <label class="radio-option"><input type="radio" name="apt-attendee" value="Partner not Attending"> Partner not Attending</label>
         </div>
+
+        <label>Spouse Name (if applicable)</label>
+        <input type="text" id="apt-spouse-name" placeholder="Leave blank if not applicable">
 
         <label>Phone</label>
         <div class="phone-row">
@@ -603,6 +641,7 @@ const LEAD_SOURCES = {
 };
 
 let callFhName = null, callFhPronunciation = null, callAfpName = null, callLeadSource = null, callDifficultyLevel = null;
+let callAddress = null, callSurveyDate = null, callSurveyDateLabel = null, callAfpAvailableDays = null;
 
 // Continuous 1-9 difficulty scale, randomly rolled within each tier's band
 // each attempt: tier 1 = 1-2 (easy), tier 2 = 3-5 (moderate), tier 3 = 6-9
@@ -615,6 +654,36 @@ function rollDifficulty(tier) {
 }
 
 function randomFrom(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+// A plausible fake home address the rep can use/reference instead of
+// inventing one — matters for the "verify the address" red flag check.
+const ADDRESS_STREET_NAMES = ['Maple', 'Oakwood', 'Willow Creek', 'Sunset', 'Birchwood', 'Meadowbrook', 'Cedar Ridge', 'Hillcrest', 'Riverside', 'Aspen', 'Fairview', 'Timberline'];
+const ADDRESS_STREET_TYPES = ['St', 'Ave', 'Dr', 'Ln', 'Ct', 'Rd', 'Way'];
+function generateRandomAddress() {
+  const num = 100 + Math.floor(Math.random() * 9800);
+  const street = randomFrom(ADDRESS_STREET_NAMES);
+  const type = randomFrom(ADDRESS_STREET_TYPES);
+  return `${num} ${street} ${type}`;
+}
+
+// How long ago the lead supposedly submitted their request — this month
+// through 6 months ago, matching the lead-source backstory.
+function generateSurveyDate() {
+  const monthsAgo = Math.floor(Math.random() * 7); // 0-6
+  const d = new Date();
+  d.setMonth(d.getMonth() - monthsAgo);
+  const label = monthsAgo === 0 ? 'This month' : monthsAgo === 1 ? '1 month ago' : `${monthsAgo} months ago`;
+  return { date: d, label: `${label} (${d.toLocaleString('default', { month: 'long', year: 'numeric' })})` };
+}
+
+// Simulated AFP calendar availability — a couple of suggested weekdays the
+// rep can reference when proposing a day, standing in for a real calendar.
+const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+function rollAfpAvailability() {
+  const shuffled = [...WEEKDAYS].sort(() => Math.random() - 0.5);
+  const count = 2 + Math.floor(Math.random() * 2); // 2 or 3 days
+  return shuffled.slice(0, count).sort((a, b) => WEEKDAYS.indexOf(a) - WEEKDAYS.indexOf(b));
+}
 
 function showPage(page, btn) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -820,6 +889,11 @@ function startModule(moduleId) {
   callAfpName = randomFrom(AFP_NAMES);
   callLeadSource = randomFrom(Object.keys(LEAD_SOURCES));
   callDifficultyLevel = rollDifficulty(activeModule.tier);
+  callAddress = generateRandomAddress();
+  const surveyRoll = generateSurveyDate();
+  callSurveyDate = surveyRoll.date;
+  callSurveyDateLabel = surveyRoll.label;
+  callAfpAvailableDays = rollAfpAvailability();
 
   document.getElementById('path-card').style.display = 'none';
   document.getElementById('briefing-card').style.display = 'block';
@@ -827,6 +901,8 @@ function startModule(moduleId) {
   document.getElementById('briefing-fh-name').textContent = callFhName;
   document.getElementById('briefing-fh-phonetic').textContent = callFhPronunciation !== callFhName ? `pronounced: ${callFhPronunciation}` : '';
   document.getElementById('briefing-afp-name').textContent = callAfpName;
+  document.getElementById('briefing-address').textContent = callAddress;
+  document.getElementById('briefing-survey-date').textContent = callSurveyDateLabel;
   document.getElementById('briefing-opening-text').textContent = '"' + LEAD_SOURCES[callLeadSource].opening + '"';
 }
 
@@ -843,6 +919,8 @@ function proceedToCall() {
   document.getElementById('info-fh-name').textContent = callFhName;
   document.getElementById('info-fh-phonetic').textContent = callFhPronunciation !== callFhName ? `pronounced: ${callFhPronunciation}` : '';
   document.getElementById('info-afp-name').textContent = callAfpName;
+  document.getElementById('info-address').textContent = callAddress;
+  document.getElementById('info-survey-date').textContent = callSurveyDateLabel;
   document.getElementById('call-info-panel').style.display = 'block';
 
   connectRealtimeSession();
@@ -864,6 +942,8 @@ async function connectRealtimeSession() {
         tier: activeModule.tier,
         difficultyLevel: callDifficultyLevel,
         objectionType: activeModule.objection_type,
+        address: callAddress,
+        surveyDateLabel: callSurveyDateLabel,
       }),
     });
     const tokenData = await tokenRes.json();
@@ -1047,8 +1127,11 @@ function setupPlanner() {
   document.getElementById('appointment-form').style.display = 'none';
   document.getElementById('result-form').style.display = 'none';
   document.getElementById('result-panel').style.display = 'none';
+  document.getElementById('afp-availability-panel').style.display = 'none';
   document.getElementById('apt-person-talked-to').value = '';
   document.getElementById('apt-location').value = '';
+  document.getElementById('apt-day').value = '';
+  document.getElementById('apt-spouse-name').value = '';
   document.getElementById('apt-important-reason').value = '';
   document.getElementById('apt-confirmer-notes').value = '';
   document.getElementById('apt-afp-notes').value = '';
@@ -1069,6 +1152,10 @@ function setupPlanner() {
   // Time selects
   populateTimeSelect(document.getElementById('apt-time'));
   populateTimeSelect(document.getElementById('callback-sched-time'));
+
+  // AFP suggested availability for this call
+  document.getElementById('afp-availability-days').innerHTML = (callAfpAvailableDays || [])
+    .map(d => `<span class="afp-day-chip">${d}</span>`).join('');
 
   // Attendee radio highlighting
   document.querySelectorAll('#apt-attendee-group input[name="apt-attendee"]').forEach(input => {
@@ -1099,6 +1186,7 @@ function selectPlannerPath(path) {
   document.getElementById('tab-result').classList.toggle('active', path === 'result');
   document.getElementById('appointment-form').style.display = path === 'appointment' ? 'block' : 'none';
   document.getElementById('result-form').style.display = path === 'result' ? 'block' : 'none';
+  document.getElementById('afp-availability-panel').style.display = path === 'appointment' ? 'block' : 'none';
 }
 
 function pickResultOption(value, fromDropdown) {
@@ -1133,12 +1221,15 @@ async function submitAppointment() {
 
   const personTalkedTo = document.getElementById('apt-person-talked-to').value.trim();
   const location = document.getElementById('apt-location').value;
+  const day = document.getElementById('apt-day').value;
   const startsAt = document.getElementById('apt-time').value;
   const attendee = document.querySelector('input[name="apt-attendee"]:checked');
   const verified = document.getElementById('apt-phone-verified').checked;
+  const spouseName = document.getElementById('apt-spouse-name').value.trim();
 
   if (!personTalkedTo) { errBox.textContent = 'Enter who you talked to.'; errBox.style.display = 'block'; return; }
   if (!location) { errBox.textContent = 'Select a location.'; errBox.style.display = 'block'; return; }
+  if (!day) { errBox.textContent = 'Select a day.'; errBox.style.display = 'block'; return; }
   if (!attendee) { errBox.textContent = 'Select attendee info.'; errBox.style.display = 'block'; return; }
   if (!verified) { errBox.textContent = 'Confirm the phone number was verified.'; errBox.style.display = 'block'; return; }
 
@@ -1146,8 +1237,10 @@ async function submitAppointment() {
     type: 'appointment',
     person_talked_to: personTalkedTo,
     location,
+    day,
     starts_at: startsAt,
     attendee_info: attendee.value,
+    spouse_name: spouseName,
     phone: `${document.getElementById('apt-phone-1').value}-${document.getElementById('apt-phone-2').value}-${document.getElementById('apt-phone-3').value}`,
     phone_verified: verified,
     most_important_reason: document.getElementById('apt-important-reason').value.trim(),
@@ -1261,6 +1354,9 @@ function redFlagBanner(r) {
   if (r.red_flag_no_email_verification) flags.push('An email address was never asked for or confirmed before scheduling.');
   if (r.red_flag_no_address_verification) flags.push('The specific appointment address was never confirmed with the lead.');
   if (r.red_flag_undersold_appointment) flags.push('The appointment was described in a way that undersold it (e.g. "drop by," "real quick") rather than reflecting its actual importance.');
+  if (r.red_flag_spouse_never_asked) flags.push('Never asked whether the information/interest was for the lead alone or included a spouse or family member.');
+  if (r.red_flag_spouse_attendance_not_asked) flags.push('A spouse exists but the rep never asked whether they\u2019d be attending the appointment.');
+  if (r.red_flag_spouse_name_not_captured) flags.push('A spouse exists but the rep never got their name.');
   if (!flags.length) return '';
   return `
     <div class="red-flag-banner">
@@ -1614,7 +1710,8 @@ function renderPlannerDetail(json) {
   if (json.type === 'appointment') {
     return `
       <div style="background:var(--surface2);border-radius:8px;padding:10px 12px;margin-top:8px;font-size:12px;color:var(--muted2);line-height:1.6">
-        <strong style="color:var(--text)">Appointment set</strong> — ${escapeHtml(json.person_talked_to||'')} · ${escapeHtml(json.location||'')} · ${escapeHtml(json.starts_at||'')} · ${escapeHtml(json.attendee_info||'')}<br>
+        <strong style="color:var(--text)">Appointment set</strong> — ${escapeHtml(json.person_talked_to||'')} · ${escapeHtml(json.location||'')} · ${escapeHtml(json.day||'')} ${escapeHtml(json.starts_at||'')} · ${escapeHtml(json.attendee_info||'')}<br>
+        ${json.spouse_name ? `Spouse: ${escapeHtml(json.spouse_name)}<br>` : ''}
         Phone: ${escapeHtml(json.phone||'')} ${json.phone_verified ? '✓ verified' : '(not verified)'}<br>
         ${json.most_important_reason ? `Most important reason: ${escapeHtml(json.most_important_reason)}<br>` : ''}
         ${json.confirmer_notes ? `Confirmer notes: ${escapeHtml(json.confirmer_notes)}<br>` : ''}

@@ -124,7 +124,7 @@ exports.handler = async (event) => {
   }
 
   try {
-    const { personaPrompt, gender, fhName, fhPronunciation, afpName, leadSource, difficultyLevel, objectionType } = JSON.parse(event.body);
+    const { personaPrompt, gender, fhName, fhPronunciation, afpName, leadSource, difficultyLevel, objectionType, address, surveyDateLabel } = JSON.parse(event.body);
     if (!personaPrompt) return { statusCode: 400, headers: { 'Content-Type': 'application/json', ...cors },
       body: JSON.stringify({ error: 'Missing personaPrompt' }) };
 
@@ -138,6 +138,12 @@ exports.handler = async (event) => {
     const afpLine = afpName
       ? `If the rep mentions scheduling you with an advisor, that advisor's name is ${afpName} — react to that name naturally if it comes up (e.g. "okay, ${afpName.split(' ')[0]}, got it").`
       : '';
+    const addressLine = address
+      ? `Your home address is ${address}. Only bring this up if the rep asks for it or if you're confirming an in-home appointment — don't volunteer it unprompted.`
+      : '';
+    const surveyDateLine = surveyDateLabel
+      ? `You submitted the request that led to this call approximately ${surveyDateLabel}. If the rep asks when you sent it in or filled it out, answer consistent with that timeframe (loosely — you don't remember the exact date, just roughly when).`
+      : '';
 
     // The stored persona_prompt text was originally written for the old
     // text-in/JSON-out pipeline (it ends with "Respond only in the required
@@ -148,6 +154,8 @@ exports.handler = async (event) => {
 ${backstory}
 ${fhLine}
 ${afpLine}
+${addressLine}
+${surveyDateLine}
 
 ${difficultyDesc}
 
