@@ -349,7 +349,7 @@
         </div>
         <div class="planner-tab" id="tab-result" onclick="selectPlannerPath('result')">
           <div class="planner-tab-title">📋 Log Result</div>
-          <div class="planner-tab-sub">No appointment — disposition the call</div>
+          <div class="planner-tab-sub">No appointment — log the result</div>
         </div>
       </div>
 
@@ -1257,6 +1257,10 @@ function redFlagBanner(r) {
   const flags = [];
   if (r.red_flag_has_plan) flags.push('This lead may already have a genuine pre-need plan with a funeral home — an appointment may not have been appropriate here.');
   if (r.red_flag_vmp_benefits_only) flags.push('This was a Veterans Memorial Program call where an appointment was scheduled without ever discussing funeral pre-planning itself — only benefits.');
+  if (r.red_flag_short_appointment) flags.push('The appointment was stated or implied to be under an hour — real appointments run about an hour.');
+  if (r.red_flag_no_email_verification) flags.push('An email address was never asked for or confirmed before scheduling.');
+  if (r.red_flag_no_address_verification) flags.push('The specific appointment address was never confirmed with the lead.');
+  if (r.red_flag_undersold_appointment) flags.push('The appointment was described in a way that undersold it (e.g. "drop by," "real quick") rather than reflecting its actual importance.');
   if (!flags.length) return '';
   return `
     <div class="red-flag-banner">
@@ -1322,7 +1326,7 @@ function renderResult(r) {
     </div>
 
     <div class="section-block">
-      <div class="section-label">Disposition Accuracy</div>
+      <div class="section-label">Call Result Accuracy</div>
       <div class="disposition-box">
         <div class="disposition-score" style="color:${r.disposition_match_score >= 7 ? 'var(--green)' : (r.disposition_match_score >= 4 ? 'var(--amber)' : 'var(--red)')}">${r.disposition_match_score}/10</div>
         <p style="font-size:13px;color:var(--muted2);line-height:1.6;margin-top:8px">${r.disposition_feedback || ''}</p>
@@ -1544,7 +1548,7 @@ async function openRepProfile(repId) {
     { key: 'conversation_quality_score', label: 'Conversation Quality' },
     { key: 'script_adherence_score', label: 'Script Adherence' },
     { key: 'question_quality_score', label: 'Question Quality' },
-    { key: 'disposition_match_score', label: 'Disposition Accuracy' },
+    { key: 'disposition_match_score', label: 'Call Result Accuracy' },
   ];
   const chipsHtml = dims.map(d => {
     const vals = doneAttempts.map(a => d.key === 'disposition_match_score' ? a.disposition_match_score : a.result_json[d.key]).filter(v => v != null);
@@ -1594,7 +1598,7 @@ async function openRepProfile(repId) {
         <span class="status-chip" style="background:${a.passed ? 'var(--green)22' : 'var(--red)22'};color:${a.passed ? 'var(--green)' : 'var(--red)'}">${a.overall_score != null ? Number(a.overall_score).toFixed(1) : '—'}</span>
       </div>
       ${redFlagBanner(a.result_json)}
-      <p class="muted-small">${new Date(a.created_at).toLocaleString()} · Disposition: ${a.disposition_reported || '—'} ${a.disposition_match_score != null ? `· Match ${a.disposition_match_score}/10` : ''}</p>
+      <p class="muted-small">${new Date(a.created_at).toLocaleString()} · Result: ${a.disposition_reported || '—'} ${a.disposition_match_score != null ? `· Match ${a.disposition_match_score}/10` : ''}</p>
       ${a.lead_source ? `<p class="muted-small">Lead source: ${LEAD_SOURCES[a.lead_source]?.label || a.lead_source} · Calling from: ${a.fh_name || '—'} · AFP referenced: ${a.afp_name || '—'}</p>` : ''}
       ${a.disposition_feedback ? `<p style="font-size:12px;color:var(--muted2);margin-top:6px">${a.disposition_feedback}</p>` : ''}
       ${renderPlannerDetail(a.disposition_form_json)}

@@ -46,6 +46,13 @@ const LEAD_SOURCE_BACKSTORY = {
 // rep builds real rapport — not just politeness, but actual human connection.
 const RAPPORT_GATE = `RAPPORT GATE (applies at every difficulty level): Start every call somewhat guarded — this is normal for a real person getting an unexpected call about a sensitive topic. Don't share much beyond short, polite answers at first. If, over the course of the call, the rep genuinely builds rapport with you — showing real warmth, empathy, active listening, patience, and not rushing you or sounding scripted — progressively open up: share more, be more relaxed, and become noticeably EASIER to persuade. If the rep stays transactional, rushed, robotic, or scripted-sounding and never actually connects with you as a person, stay guarded for the whole call and be harder to move, regardless of difficulty level. Rapport-building is not the same as just being polite — it has to feel like the rep actually cares and is listening, not just following steps.`;
 
+// Real appointments run about an hour — a rep offering a shortened
+// appointment (15-30 minutes) as an easier sell is not a legitimate tactic,
+// so personas shouldn't accept it or make it easier to schedule that way.
+const APPOINTMENT_LENGTH_NOTE = `APPOINTMENT LENGTH: A real appointment with an advisor runs about an hour. If the rep offers or implies a shorter appointment (e.g. "just 15-20 minutes") as a way to make scheduling easier, don't treat that as more persuasive or lower-commitment — react the way a real person would to being told a meeting about their funeral wishes will only take a few minutes: mildly skeptical that it's enough time, not reassured. Do not agree to schedule specifically because the appointment was framed as short.
+
+IF AND ONLY IF the conversation reaches the point of actually agreeing to or confirming a specific appointment, you should ALMOST ALWAYS (the large majority of the time) naturally ask something like "how long will that take?" or "how long does the appointment usually run?" before finalizing it. Ask this like a real person would — casually, in passing — not as an interrogation. Pay attention to whatever the rep tells you in response.`;
+
 // Difficulty is a continuous 1-9 scale, randomly rolled per attempt within
 // each tier's band (tier 1 = 1-2, tier 2 = 3-5, tier 3 = 6-9), rather than
 // one fixed description per tier — this gives real variation WITHIN a tier
@@ -63,7 +70,8 @@ function describeDifficulty(level) {
   if (lvl <= 2) {
     return `DIFFICULTY LEVEL: ${lvl} of 9 (easy band, levels 1-2).
 CONVERSATIONAL OPENNESS: You start only mildly guarded and open up almost immediately once the rep shows basic warmth and courtesy — you're not an open book from word one, but you don't make them work hard either. Your objection is a light smokescreen, not real resistance.
-APPOINTMENT OUTCOME GATE: If the rep is polite, roughly follows a sensible call flow (intro → reason for reaching out → Final Wishes Organizer → appointment ask), and gives any reasonable response to your objection, agree to schedule a full appointment. Don't hold out for deep discovery questions at this level. Only decline or fall back to "just call me back" if the rep is genuinely rude, ignores your objection entirely, or is wildly off-script.`;
+OBJECTION HANDLING AT THIS LEVEL (important): Raise your objection ONCE, fairly early in the call. As soon as the rep gives ANY reasonable, non-dismissive response to it — even a fairly simple one — let it go completely and don't bring it up again. Move on naturally with the rest of the conversation (your reason for reaching out, hearing about the Final Wishes Organizer, etc.) the way a real person would once a minor concern has been addressed. Do NOT repeat the same objection after every response, and do NOT keep circling back to it — that is not how real people talk, and it's the single biggest thing to avoid at this difficulty.
+APPOINTMENT OUTCOME GATE: If the rep is polite, roughly follows a sensible call flow (intro → reason for reaching out → Final Wishes Organizer → appointment ask), and gave that one reasonable response to your objection, agree to schedule a full appointment. Don't hold out for deep discovery questions at this level. Only decline or fall back to "just call me back" if the rep is genuinely rude, ignores your objection entirely with no response at all, or is wildly off-script.`;
   }
 
   if (lvl <= 5) {
@@ -82,8 +90,10 @@ APPOINTMENT OUTCOME GATE: This is a hard call — do not make it easy. Only agre
 // Real prospects don't manufacture an endless stream of new objections —
 // they raise the same concern once or twice, maybe rephrase it, and then
 // make a decisive move: soften and continue, agree to a callback, or shut
-// the conversation down. All three are legitimate resolutions.
-const OBJECTION_CYCLE_CAP = `OBJECTION PACING (important for realism): Only raise your objection, or a natural rephrasing of it, up to about 1-3 times total over the course of the call — don't keep manufacturing fresh objections indefinitely. After raising it that many times, make a decisive choice based on the difficulty gate above: schedule a full appointment, agree to a callback (a legitimate middle outcome, not a failure), or firmly and politely end the call. Real people resolve one way or another; they don't stall forever.`;
+// the conversation down. All three are legitimate resolutions. Just as
+// important: they don't repeat the objection after every single response
+// either — a real person lets a normal conversation happen in between.
+const OBJECTION_CYCLE_CAP = `OBJECTION PACING (important for realism — read carefully): Only raise your objection, or a natural rephrasing of it, up to about 1-3 times total over the WHOLE call — never more. Just as importantly, do NOT bring it up after every single response from the rep — that reads as robotic and repetitive, not like a real person. After you raise it and the rep responds at all reasonably, let at least one or two normal conversational exchanges happen before you'd ever consider bringing it up again — and only actually bring it up again if it still feels like a genuine, unresolved concern to you, not as a reflex. Once you've raised it your last time (within the 1-3 total), make a decisive choice based on the difficulty gate above: schedule a full appointment, agree to a callback (a legitimate middle outcome, not a failure), or firmly and politely end the call. Real people resolve one way or another; they don't stall forever, and they don't loop the same pushback over and over.`;
 
 // "Already taken care of" claims (has-will / has-plans objection type):
 // most real families who say this only mean a basic will or life insurance
@@ -142,6 +152,8 @@ ${afpLine}
 ${difficultyDesc}
 
 ${RAPPORT_GATE}
+
+${APPOINTMENT_LENGTH_NOTE}
 
 ${OBJECTION_CYCLE_CAP}
 
