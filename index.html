@@ -297,6 +297,10 @@
         <div class="briefing-label">Survey Received</div>
         <div class="briefing-value" id="briefing-survey-date"></div>
       </div>
+      <div class="briefing-row">
+        <div class="briefing-label">AFP Availability</div>
+        <div id="briefing-afp-availability"></div>
+      </div>
       <div class="briefing-opening">
         <div class="briefing-label">Your opening line for this lead source</div>
         <p id="briefing-opening-text"></p>
@@ -328,6 +332,10 @@
       <div class="call-info-row">
         <div class="call-info-label">Survey Received</div>
         <div class="call-info-value" id="info-survey-date"></div>
+      </div>
+      <div class="call-info-row">
+        <div class="call-info-label">AFP Availability</div>
+        <div id="info-afp-availability"></div>
       </div>
     </div>
 
@@ -903,6 +911,8 @@ function startModule(moduleId) {
   document.getElementById('briefing-afp-name').textContent = callAfpName;
   document.getElementById('briefing-address').textContent = callAddress;
   document.getElementById('briefing-survey-date').textContent = callSurveyDateLabel;
+  document.getElementById('briefing-afp-availability').innerHTML = (callAfpAvailableDays || [])
+    .map(d => `<span class="afp-day-chip">${d}</span>`).join('');
   document.getElementById('briefing-opening-text').textContent = '"' + LEAD_SOURCES[callLeadSource].opening + '"';
 }
 
@@ -921,6 +931,8 @@ function proceedToCall() {
   document.getElementById('info-afp-name').textContent = callAfpName;
   document.getElementById('info-address').textContent = callAddress;
   document.getElementById('info-survey-date').textContent = callSurveyDateLabel;
+  document.getElementById('info-afp-availability').innerHTML = (callAfpAvailableDays || [])
+    .map(d => `<span class="afp-day-chip">${d}</span>`).join('');
   document.getElementById('call-info-panel').style.display = 'block';
 
   connectRealtimeSession();
@@ -1398,6 +1410,7 @@ function renderResult(r) {
         ${scoreChip('Conversation Quality', r.conversation_quality_score)}
         ${scoreChip('Script Adherence', r.script_adherence_score)}
         ${scoreChip('Question Quality', r.question_quality_score)}
+        ${scoreChip('Appointment Quality', r.appointment_quality_score)}
       </div>
     </div>
 
@@ -1644,6 +1657,7 @@ async function openRepProfile(repId) {
     { key: 'conversation_quality_score', label: 'Conversation Quality' },
     { key: 'script_adherence_score', label: 'Script Adherence' },
     { key: 'question_quality_score', label: 'Question Quality' },
+    { key: 'appointment_quality_score', label: 'Appointment Quality' },
     { key: 'disposition_match_score', label: 'Call Result Accuracy' },
   ];
   const chipsHtml = dims.map(d => {
