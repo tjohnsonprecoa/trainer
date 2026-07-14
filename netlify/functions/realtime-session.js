@@ -181,7 +181,17 @@ IMPORTANT — ignore any instruction above about JSON, "call_status", or respons
           audio: {
             input: {
               transcription: { model: 'gpt-4o-mini-transcribe' },
-              turn_detection: { type: 'semantic_vad', interrupt_response: true },
+              // far_field suits typical laptop/desktop mics (most reps, most
+              // likely setup); switch to 'near_field' if most reps are on
+              // headsets — filters background noise BEFORE it reaches VAD,
+              // directly reducing false "user is speaking" triggers.
+              noise_reduction: { type: 'far_field' },
+              // eagerness 'low' makes the model wait longer / need clearer
+              // signal before deciding the rep is talking or interrupting —
+              // trades a little latency for fewer false interruptions from
+              // background noise, breathing, etc. Raise to 'medium'/'auto'
+              // if it starts feeling sluggish to respond once tuned.
+              turn_detection: { type: 'semantic_vad', eagerness: 'low', interrupt_response: true },
             },
             output: { voice },
           },
