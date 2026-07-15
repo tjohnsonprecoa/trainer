@@ -1430,9 +1430,9 @@ function redFlagBanner(r) {
   if (r.red_flag_no_email_verification) flags.push('An email address was never asked for or confirmed before scheduling.');
   if (r.red_flag_no_address_verification) flags.push('The specific appointment address was never confirmed with the lead.');
   if (r.red_flag_undersold_appointment) flags.push('The appointment was described in a way that undersold it (e.g. "drop by," "real quick") rather than reflecting its actual importance.');
-  if (r.red_flag_spouse_never_asked) flags.push('Never asked whether the information/interest was for the lead alone or included a spouse or family member.');
-  if (r.red_flag_spouse_attendance_not_asked) flags.push('A spouse exists but the rep never asked whether they\u2019d be attending the appointment.');
-  if (r.red_flag_spouse_name_not_captured) flags.push('A spouse exists but the rep never got their name.');
+  if (r.red_flag_spouse_never_asked) flags.push('Whether this was for the lead alone or included a spouse/family member never came up in the call.');
+  if (r.red_flag_spouse_attendance_not_asked) flags.push('A spouse exists but whether they\u2019d attend the appointment was never established.');
+  if (r.red_flag_spouse_name_not_captured) flags.push('A spouse exists but their name never came up in the conversation.');
   if (!flags.length) return '';
   return `
     <div class="red-flag-banner">
@@ -1627,9 +1627,9 @@ const RED_FLAG_LABELS = {
   red_flag_no_email_verification: 'Email never asked for/confirmed',
   red_flag_no_address_verification: 'Appointment address never confirmed',
   red_flag_undersold_appointment: 'Appointment described as a quick drop-by',
-  red_flag_spouse_never_asked: 'Never asked if info was for a spouse/family member too',
-  red_flag_spouse_attendance_not_asked: 'Spouse exists but attendance never asked',
-  red_flag_spouse_name_not_captured: 'Spouse exists but name never captured',
+  red_flag_spouse_never_asked: 'Spouse/family member status never established',
+  red_flag_spouse_attendance_not_asked: 'Spouse exists but attendance never established',
+  red_flag_spouse_name_not_captured: 'Spouse exists but name never came up',
 };
 
 async function openInsights() {

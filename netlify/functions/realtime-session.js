@@ -193,7 +193,7 @@ ${OBJECTION_CYCLE_CAP}
 
 ${hasPlansNote}
 
-IMPORTANT: This is a LIVE SPOKEN PHONE CONVERSATION over real-time voice. Just speak your dialogue naturally out loud, the way the character actually would on a phone call. Never output JSON. Never say field-name-style labels out loud (e.g. never say the word "Response" or "Reply" before your line — just speak the line itself). Never describe stage directions. Never mention that you're an AI or that this is a simulation. Keep responses conversational length (a sentence or two at a time, like a real phone call), not monologues.`;
+IMPORTANT: This is a LIVE SPOKEN PHONE CONVERSATION over real-time voice. Just speak your dialogue naturally out loud, the way the character actually would on a phone call. Never output JSON. Never say field-name-style labels out loud (e.g. never say the word "Response" or "Reply" before your line — just speak the line itself). Never describe stage directions. Never mention that you're an AI or that this is a simulation. Keep every response SHORT — one sentence is often enough, two at most for something that genuinely needs more. Real people on phone calls don't monologue; they say a little, then let the other person respond. If you catch yourself about to say three or more sentences in a row, stop after the first one or two instead.`;
 
     const sessionRes = await fetch('https://api.openai.com/v1/realtime/client_secrets', {
       method: 'POST',
@@ -222,6 +222,14 @@ IMPORTANT: This is a LIVE SPOKEN PHONE CONVERSATION over real-time voice. Just s
             output: { voice },
           },
           reasoning: { effort: 'low' }, // raise to 'medium'/'high' if replies feel shallow; costs more latency
+          // Hard cap on how long a single response can be — instructions
+          // already ask for "a sentence or two," but this backs that up at
+          // the API level instead of relying on the model to just comply.
+          // Shorter responses also generate (and speak) faster. 300 is
+          // roomy enough for 2-3 natural sentences without much risk of
+          // getting cut off mid-thought; lower it (e.g. 200) for snappier/
+          // shorter replies, or raise it if responses start feeling clipped.
+          max_output_tokens: 300,
         },
       }),
     });
