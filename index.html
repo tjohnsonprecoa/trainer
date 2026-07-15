@@ -204,6 +204,14 @@
   .rep-row-stats { margin-left: auto; text-align: right; }
   .rep-row-pct { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 18px; }
   .rep-row-tier { font-size: 11px; color: var(--muted); }
+  .insight-row { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 8px; }
+  .insight-row-label { flex: 1; font-size: 13px; }
+  .insight-row-sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .insight-row-stat { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 16px; text-align: right; min-width: 60px; }
+  .insight-bar-track { background: var(--surface2); border-radius: 6px; height: 8px; overflow: hidden; flex: 1; max-width: 120px; }
+  .insight-bar-fill { background: var(--red); height: 100%; }
+  .feedback-item { border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; margin-bottom: 10px; font-size: 13px; }
+  .feedback-item-meta { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
   .attempt-history-item { border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 12px; }
   .status-chip { font-size: 11px; padding: 3px 10px; border-radius: 20px; font-weight: 700; text-transform: uppercase; }
   .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.7); z-index: 1000; align-items: center; justify-content: center; padding: 20px; }
@@ -352,7 +360,14 @@
         <div class="talk-hint">The mic is live — just talk naturally, the call handles turn-taking on its own</div>
       </div>
       <div style="margin-top:24px;display:flex;gap:10px;justify-content:center">
+        <button class="btn btn-ghost" style="width:auto" onclick="toggleCallFeedback()">💬 Feedback</button>
         <button class="btn btn-ghost" style="width:auto" onclick="endCallManually()">End Call</button>
+      </div>
+      <div id="call-feedback-box" style="display:none;margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
+        <label>Something felt off? Quick note (doesn't pause the call)</label>
+        <textarea id="call-feedback-text" rows="2" placeholder="e.g. persona repeated the objection right after I addressed it..."></textarea>
+        <button class="btn btn-ghost" style="width:auto" onclick="submitCallFeedback()">Submit</button>
+        <span id="call-feedback-confirm" style="display:none;color:var(--green);font-size:12px;margin-left:10px">✓ Thanks, logged.</span>
       </div>
     </div>
 
@@ -540,9 +555,39 @@
     <!-- Rep list -->
     <div id="manager-rep-list" style="display:none">
       <div class="card">
-        <div class="card-title">New Hires</div>
+        <div class="readiness-header">
+          <div class="card-title" style="margin-bottom:0">New Hires</div>
+          <button class="btn btn-ghost" style="width:auto" onclick="openInsights()">📊 Insights</button>
+        </div>
         <p class="muted-small" style="margin-bottom:14px">Click a rep to see their full path, what's next, and where they're struggling.</p>
         <div id="rep-list-body"></div>
+      </div>
+    </div>
+
+    <!-- Aggregate insights (across all reps) -->
+    <div id="manager-insights" style="display:none">
+      <button class="btn btn-ghost" style="width:auto;margin-bottom:16px" onclick="backToRepList()">← All Reps</button>
+
+      <div class="card">
+        <div class="card-title">Module Performance (all reps, weakest first)</div>
+        <p class="muted-small" style="margin-bottom:14px">Low average score or pass rate across many reps points at a module that may be miscalibrated — not just reps having a hard time.</p>
+        <div id="insights-module-table"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Red Flag Frequency (all reps)</div>
+        <div id="insights-red-flags"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Recent Coaching Notes (all reps)</div>
+        <div id="insights-coaching-notes"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Rep Feedback on the AI</div>
+        <p class="muted-small" style="margin-bottom:14px">Submitted directly by reps during or after calls — worth reviewing for persona or scoring fixes.</p>
+        <div id="insights-ai-feedback"></div>
       </div>
     </div>
 
@@ -1093,6 +1138,25 @@ function teardownRealtimeSession() {
   if (remoteAudioEl) { try { remoteAudioEl.pause(); } catch (e) {} remoteAudioEl = null; }
 }
 
+function toggleCallFeedback() {
+  const box = document.getElementById('call-feedback-box');
+  box.style.display = box.style.display === 'none' ? 'block' : 'none';
+}
+
+async function submitCallFeedback() {
+  const text = document.getElementById('call-feedback-text').value.trim();
+  if (!text) return;
+  try {
+    await sb.from('ai_feedback').insert({
+      rep_id: repId, team: repTeam, module_id: activeModule.id,
+      source: 'during_call', feedback_text: text,
+    });
+    document.getElementById('call-feedback-text').value = '';
+    document.getElementById('call-feedback-confirm').style.display = 'inline';
+    setTimeout(() => { document.getElementById('call-feedback-confirm').style.display = 'none'; }, 3000);
+  } catch (e) { /* non-fatal — don't interrupt the call over a feedback save failure */ }
+}
+
 function endCallManually() {
   if (conversationHistory.length === 0) { alert('Have at least one exchange before ending the call.'); return; }
   teardownRealtimeSession();
@@ -1442,8 +1506,30 @@ function renderResult(r) {
       </div>
     </div>
 
+    <div class="section-block">
+      <div class="section-label">Feedback on This AI Persona / Call</div>
+      <p class="muted-small" style="margin-bottom:10px">Something felt unrealistic, the scoring seemed off, or anything else worth flagging? This goes straight to managers, not just the score.</p>
+      <textarea id="post-call-feedback-text" rows="2" placeholder="Optional — leave blank to skip"></textarea>
+      <button class="btn btn-ghost" style="width:auto" onclick="submitPostCallFeedback()">Submit Feedback</button>
+      <span id="post-call-feedback-confirm" style="display:none;color:var(--green);font-size:12px;margin-left:10px">✓ Thanks, logged.</span>
+    </div>
+
     <button class="btn btn-primary" style="margin-top:24px" onclick="backToPath()">Back to Training Path</button>
   `;
+}
+
+async function submitPostCallFeedback() {
+  const text = document.getElementById('post-call-feedback-text').value.trim();
+  if (!text) return;
+  try {
+    await sb.from('ai_feedback').insert({
+      rep_id: repId, team: repTeam, module_id: activeModule.id, attempt_id: lastAttemptId,
+      source: 'post_call', feedback_text: text,
+    });
+    document.getElementById('post-call-feedback-text').value = '';
+    document.getElementById('post-call-feedback-confirm').style.display = 'inline';
+    setTimeout(() => { document.getElementById('post-call-feedback-confirm').style.display = 'none'; }, 3000);
+  } catch (e) { /* non-fatal */ }
 }
 
 async function backToPath() {
@@ -1533,8 +1619,115 @@ async function renderDashboard() {
   }).join('');
 }
 
+// Human-readable labels for the red-flag frequency count, matching redFlagBanner()'s messages
+const RED_FLAG_LABELS = {
+  red_flag_has_plan: 'Scheduled despite an existing real pre-need plan',
+  red_flag_vmp_benefits_only: 'VMP appointment scheduled without discussing pre-planning',
+  red_flag_short_appointment: 'Appointment stated as under an hour',
+  red_flag_no_email_verification: 'Email never asked for/confirmed',
+  red_flag_no_address_verification: 'Appointment address never confirmed',
+  red_flag_undersold_appointment: 'Appointment described as a quick drop-by',
+  red_flag_spouse_never_asked: 'Never asked if info was for a spouse/family member too',
+  red_flag_spouse_attendance_not_asked: 'Spouse exists but attendance never asked',
+  red_flag_spouse_name_not_captured: 'Spouse exists but name never captured',
+};
+
+async function openInsights() {
+  document.getElementById('manager-rep-list').style.display = 'none';
+  document.getElementById('manager-insights').style.display = 'block';
+
+  const { data: attemptData, error } = await sb.from('training_attempts')
+    .select('module_id, overall_score, passed, result_json, disposition_match_score, created_at, rep_id')
+    .eq('status', 'done')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    document.getElementById('insights-module-table').innerHTML = `<p class="muted-small">Could not load: ${error.message}</p>`;
+    return;
+  }
+  const attempts = attemptData || [];
+
+  // --- Module performance, weakest average first ---
+  const byModule = {};
+  attempts.forEach(a => {
+    if (!byModule[a.module_id]) byModule[a.module_id] = { scores: [], passedCount: 0, total: 0 };
+    if (a.overall_score != null) byModule[a.module_id].scores.push(a.overall_score);
+    if (a.passed) byModule[a.module_id].passedCount++;
+    byModule[a.module_id].total++;
+  });
+  const moduleRows = allModulesList
+    .map(m => {
+      const stats = byModule[m.id];
+      if (!stats || !stats.total) return { mod: m, avg: null, passRate: null, total: 0 };
+      const avg = stats.scores.reduce((a, b) => a + b, 0) / stats.scores.length;
+      return { mod: m, avg, passRate: Math.round((stats.passedCount / stats.total) * 100), total: stats.total };
+    })
+    .filter(r => r.total > 0)
+    .sort((a, b) => a.avg - b.avg);
+
+  document.getElementById('insights-module-table').innerHTML = moduleRows.length
+    ? moduleRows.map(r => `
+      <div class="insight-row">
+        <div class="insight-row-label">
+          <strong>${escapeHtml(r.mod.title)}</strong>
+          <div class="insight-row-sub">${r.total} attempt${r.total === 1 ? '' : 's'} · ${r.passRate}% pass rate</div>
+        </div>
+        <div class="insight-row-stat" style="color:${r.avg >= 7 ? 'var(--green)' : (r.avg >= 4 ? 'var(--amber)' : 'var(--red)')}">${r.avg.toFixed(1)}</div>
+      </div>`).join('')
+    : '<p class="muted-small">No scored attempts yet.</p>';
+
+  // --- Red flag frequency across everyone ---
+  const flagCounts = {};
+  Object.keys(RED_FLAG_LABELS).forEach(k => flagCounts[k] = 0);
+  attempts.forEach(a => {
+    if (!a.result_json) return;
+    Object.keys(RED_FLAG_LABELS).forEach(k => { if (a.result_json[k]) flagCounts[k]++; });
+  });
+  const totalAttempts = attempts.length || 1;
+  const flagRows = Object.entries(flagCounts)
+    .filter(([, count]) => count > 0)
+    .sort((a, b) => b[1] - a[1]);
+
+  document.getElementById('insights-red-flags').innerHTML = flagRows.length
+    ? flagRows.map(([key, count]) => {
+        const pct = Math.round((count / totalAttempts) * 100);
+        return `
+        <div class="insight-row">
+          <div class="insight-row-label">${RED_FLAG_LABELS[key]}</div>
+          <div class="insight-bar-track"><div class="insight-bar-fill" style="width:${pct}%"></div></div>
+          <div class="insight-row-stat">${count}</div>
+        </div>`;
+      }).join('')
+    : '<p class="muted-small">No red flags recorded yet — good sign.</p>';
+
+  // --- Recent coaching notes across everyone (most recent attempts with feedback) ---
+  const recentWithImprovements = attempts.filter(a => a.result_json && a.result_json.improvements).slice(0, 15);
+  document.getElementById('insights-coaching-notes').innerHTML = recentWithImprovements.length
+    ? `<ul class="bullet-list">${recentWithImprovements
+        .flatMap(a => (a.result_json.improvements || '').split('|').filter(Boolean).slice(0, 1))
+        .slice(0, 15)
+        .map(s => `<li>${escapeHtml(s)}</li>`).join('')}</ul>`
+    : '<p class="muted-small">No coaching notes yet.</p>';
+
+  // --- Rep feedback on the AI ---
+  const { data: feedbackData } = await sb.from('ai_feedback').select('*').order('created_at', { ascending: false }).limit(30);
+  document.getElementById('insights-ai-feedback').innerHTML = (feedbackData || []).length
+    ? feedbackData.map(f => {
+        const mod = allModulesById[f.module_id];
+        return `
+        <div class="feedback-item">
+          <div class="feedback-item-meta">${escapeHtml(f.rep_id)}${f.team ? ' · ' + escapeHtml(f.team) : ''} · ${mod ? escapeHtml(mod.title) : ''} · ${f.source === 'during_call' ? 'during call' : 'after call'} · ${new Date(f.created_at).toLocaleString()}</div>
+          <div>${escapeHtml(f.feedback_text)}</div>
+        </div>`;
+      }).join('')
+    : '<p class="muted-small">No feedback submitted yet.</p>';
+}
+
+
+
 function backToRepList() {
   document.getElementById('manager-rep-profile').style.display = 'none';
+  document.getElementById('manager-insights').style.display = 'none';
   document.getElementById('manager-rep-list').style.display = 'block';
 }
 
