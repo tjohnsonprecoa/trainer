@@ -445,6 +445,9 @@
         </div>
         <label class="verify-check"><input type="checkbox" id="apt-phone-verified"> Verified — I confirmed this number with the lead on the call *</label>
 
+        <label>Email (ask for it on the call, then enter it here)</label>
+        <input type="text" id="apt-email" placeholder="e.g. linda52@yahoo.com">
+
         <label>Most Important Reason</label>
         <input type="text" id="apt-important-reason" placeholder="What matters most to them about pre-planning...">
 
@@ -694,7 +697,7 @@ const LEAD_SOURCES = {
 };
 
 let callFhName = null, callFhPronunciation = null, callAfpName = null, callLeadSource = null, callDifficultyLevel = null;
-let callAddress = null, callSurveyDate = null, callSurveyDateLabel = null, callAfpAvailableDays = null;
+let callAddress = null, callSurveyDate = null, callSurveyDateLabel = null, callAfpAvailableDays = null, callPersonaEmail = null;
 
 // Continuous 1-9 difficulty scale, randomly rolled within each tier's band
 // each attempt: tier 1 = 1-2 (easy), tier 2 = 3-5 (moderate), tier 3 = 6-9
@@ -736,6 +739,16 @@ function rollAfpAvailability() {
   const shuffled = [...WEEKDAYS].sort(() => Math.random() - 0.5);
   const count = 2 + Math.floor(Math.random() * 2); // 2 or 3 days
   return shuffled.slice(0, count).sort((a, b) => WEEKDAYS.indexOf(a) - WEEKDAYS.indexOf(b));
+}
+
+// A consistent fake email for the persona to give when asked — matters for
+// the "email never verified" red flag: the persona needs a stable answer,
+// and the rep needs something concrete to read back and log.
+const EMAIL_DOMAINS = ['gmail.com', 'yahoo.com', 'aol.com', 'hotmail.com'];
+function generatePersonaEmail(personaName) {
+  const first = (personaName || 'lead').split(' ')[0].toLowerCase();
+  const num = 2 + Math.floor(Math.random() * 70); // reads like a birth-year suffix or favorite number
+  return `${first}${num}@${randomFrom(EMAIL_DOMAINS)}`;
 }
 
 function showPage(page, btn) {
@@ -947,6 +960,11 @@ function startModule(moduleId) {
   callSurveyDate = surveyRoll.date;
   callSurveyDateLabel = surveyRoll.label;
   callAfpAvailableDays = rollAfpAvailability();
+  callPersonaEmail = generatePersonaEmail(activeModule.persona_name);
+
+  // Reset leftover during-call feedback UI from any previous call
+  document.getElementById('call-feedback-box').style.display = 'none';
+  document.getElementById('call-feedback-text').value = '';
 
   document.getElementById('path-card').style.display = 'none';
   document.getElementById('briefing-card').style.display = 'block';
@@ -1001,6 +1019,7 @@ async function connectRealtimeSession() {
         objectionType: activeModule.objection_type,
         address: callAddress,
         surveyDateLabel: callSurveyDateLabel,
+        personaEmail: callPersonaEmail,
       }),
     });
     const tokenData = await tokenRes.json();
@@ -1208,6 +1227,7 @@ function setupPlanner() {
   document.getElementById('apt-location').value = '';
   document.getElementById('apt-day').value = '';
   document.getElementById('apt-spouse-name').value = '';
+  document.getElementById('apt-email').value = '';
   document.getElementById('apt-important-reason').value = '';
   document.getElementById('apt-confirmer-notes').value = '';
   document.getElementById('apt-afp-notes').value = '';
@@ -1317,6 +1337,7 @@ async function submitAppointment() {
     starts_at: startsAt,
     attendee_info: attendee.value,
     spouse_name: spouseName,
+    email: document.getElementById('apt-email').value.trim(),
     phone: `${document.getElementById('apt-phone-1').value}-${document.getElementById('apt-phone-2').value}-${document.getElementById('apt-phone-3').value}`,
     phone_verified: verified,
     most_important_reason: document.getElementById('apt-important-reason').value.trim(),
@@ -1381,6 +1402,11 @@ async function submitToScoring(dispositionReported, dispositionNotesText, dispos
         difficulty: activeModule.difficulty, passThreshold: activeModule.pass_threshold,
         transcript, dispositionReported, dispositionNotesText, notesPhotoUrl,
         leadSource: callLeadSource,
+        dispositionFormJson,
+        tier: activeModule.tier,
+        difficultyLevel: callDifficultyLevel,
+        fhName: callFhName,
+        afpName: callAfpName,
       }),
     }).catch(() => {});
 
@@ -1919,6 +1945,7 @@ function renderPlannerDetail(json) {
       <div style="background:var(--surface2);border-radius:8px;padding:10px 12px;margin-top:8px;font-size:12px;color:var(--muted2);line-height:1.6">
         <strong style="color:var(--text)">Appointment set</strong> — ${escapeHtml(json.person_talked_to||'')} · ${escapeHtml(json.location||'')} · ${escapeHtml(json.day||'')} ${escapeHtml(json.starts_at||'')} · ${escapeHtml(json.attendee_info||'')}<br>
         ${json.spouse_name ? `Spouse: ${escapeHtml(json.spouse_name)}<br>` : ''}
+        ${json.email ? `Email: ${escapeHtml(json.email)}<br>` : ''}
         Phone: ${escapeHtml(json.phone||'')} ${json.phone_verified ? '✓ verified' : '(not verified)'}<br>
         ${json.most_important_reason ? `Most important reason: ${escapeHtml(json.most_important_reason)}<br>` : ''}
         ${json.confirmer_notes ? `Confirmer notes: ${escapeHtml(json.confirmer_notes)}<br>` : ''}

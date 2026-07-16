@@ -138,7 +138,7 @@ exports.handler = async (event) => {
   }
 
   try {
-    const { personaPrompt, gender, fhName, fhPronunciation, afpName, leadSource, difficultyLevel, objectionType, address, surveyDateLabel } = JSON.parse(event.body);
+    const { personaPrompt, gender, fhName, fhPronunciation, afpName, leadSource, difficultyLevel, objectionType, address, surveyDateLabel, personaEmail } = JSON.parse(event.body);
     if (!personaPrompt) return { statusCode: 400, headers: { 'Content-Type': 'application/json', ...cors },
       body: JSON.stringify({ error: 'Missing personaPrompt' }) };
 
@@ -157,6 +157,9 @@ exports.handler = async (event) => {
       : '';
     const surveyDateLine = surveyDateLabel
       ? `You submitted the request that led to this call approximately ${surveyDateLabel}. If the rep asks when you sent it in or filled it out, answer consistent with that timeframe (loosely — you don't remember the exact date, just roughly when).`
+      : '';
+    const emailLine = personaEmail
+      ? `Your email address is ${personaEmail}. Only give it if the rep asks for it — say it naturally the way a real person reads out their email (e.g. "${personaEmail.replace('@', ' at ').replace(/\./g, ' dot ')}"). If the rep reads it back to confirm, confirm it.`
       : '';
 
     // The stored persona_prompt text was originally written for the old
@@ -178,6 +181,7 @@ ${fhLine}
 ${afpLine}
 ${addressLine}
 ${surveyDateLine}
+${emailLine}
 
 ${CALL_OPENING_RULE}
 

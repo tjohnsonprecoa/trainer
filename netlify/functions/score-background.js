@@ -75,6 +75,7 @@ exports.handler = async (event) => {
     const {
       repId, team, moduleTitle, objectionType, difficulty, passThreshold,
       transcript, dispositionReported, dispositionNotesText, notesPhotoUrl, moduleId, leadSource,
+      dispositionFormJson, tier, difficultyLevel, fhName, afpName,
     } = body;
 
     if (!jobId || !transcript) return;
@@ -103,8 +104,10 @@ exports.handler = async (event) => {
 
 MODULE: ${moduleTitle}
 OBJECTION TYPE: ${objectionType}
-DIFFICULTY: ${difficulty}
+TIER: ${tier || 'unknown'} (1 = fundamentals/easy, 2 = moderate, 3 = hard)
+ROLLED DIFFICULTY THIS ATTEMPT: ${difficultyLevel || difficulty || 'unknown'} on a 1-9 scale (1-2 easy band, 3-5 moderate band, 6-9 hard band) — the AI persona's guardedness and scheduling bar were set to this level for this specific attempt, so calibrate your leniency to THIS number, not just the tier
 PASS THRESHOLD: ${passThreshold}/10
+CALL CONTEXT: The rep was assigned to call as a representative of "${fhName || 'unknown funeral home'}" and to reference an advisor named "${afpName || 'unknown'}" — as part of script adherence, check whether they actually introduced themselves with that funeral home's name and used that advisor's name when proposing the appointment.
 
 Score the rep primarily on HOW they ran the call, not just whether they landed an appointment. Getting an appointment matters much less than doing these things well:
 1. CONVERSATION QUALITY — did they sound natural, unhurried, and genuinely present, rather than robotic, scripted-sounding, or rushed?
@@ -119,6 +122,8 @@ Score generously for easy (tier 1) personas — these are intentionally easy "sm
 SECOND, separately, grade the rep's CALL RESULT ACCURACY — how well they logged the outcome of this call in their planner app afterward:
 - The rep reported the disposition as: "${dispositionLabel}"
 - The rep's free-text note on how it went: "${dispositionNotesText || '(none provided)'}"
+- The COMPLETE form the rep filled out afterward (every field they logged): ${dispositionFormJson ? JSON.stringify(dispositionFormJson) : '(no structured form data)'}
+  Compare EVERY field in that form against the transcript: does the logged day/time match what was agreed on the call? Does the logged spouse name match the name that came up? Does the logged email match what the prospect gave? Does the attendee info match what was actually discussed? Fields that contradict the transcript, or fields left empty when the information WAS discussed on the call, both count against disposition_match_score.
 - A photo of the notes they took during the call is attached${imageBlock ? '' : ' (none was provided or it could not be loaded)'}.
 
 Compare all of this against what ACTUALLY happened in the transcript. New hires often over-report positive outcomes, under-document key details (family name, callback time, specific objection raised), or file a disposition that doesn't match reality. Grade disposition_match_score 1-10: 10 = disposition and notes are accurate and complete relative to the transcript; low scores = mismatch (e.g. logged "Appointment Set" but no appointment was actually confirmed) or notes missing details that were clearly stated on the call (names, dates, callback times, specific objections).
