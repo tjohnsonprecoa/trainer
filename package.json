@@ -1,0 +1,8 @@
+{
+  "name": "fpc-training-pathway",
+  "private": true,
+  "description": "Netlify Functions dependencies for FPC Training Pathway. Netlify installs these automatically during deploy — no local npm install needed.",
+  "dependencies": {
+    "@google/genai": "^1.0.0"
+  }
+}

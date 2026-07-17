@@ -27,6 +27,9 @@
 [functions."realtime-session"]
   timeout = 26
 
+[functions."gemini-session"]
+  timeout = 26
+
 [functions."transcribe-background"]
   timeout = 900
 
