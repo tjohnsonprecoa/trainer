@@ -858,16 +858,28 @@ function renderFocusAreas(attempts) {
     items.push(`${RED_FLAG_LABELS[key]} — came up in ${count} of your last ${doneAttempts.length} scored calls.`);
   });
 
-  // Fill remaining slots with recent, specific coaching tips from their own calls
-  const recentTips = doneAttempts.filter(a => a.result_json.coaching_tip).map(a => a.result_json.coaching_tip);
+  // Fill remaining slots with recent coaching tips from their own calls —
+  // shortened to a single short line, since coaching_tip is written as a
+  // full paragraph (what happened + what to practice) and this card is
+  // meant to be scannable at a glance, not another paragraph to read.
+  const recentTips = doneAttempts.filter(a => a.result_json.coaching_tip).map(a => shortenTip(a.result_json.coaching_tip));
   for (const tip of recentTips) {
     if (items.length >= 5) break;
-    if (!items.some(existing => existing.includes(tip.slice(0, 30)))) items.push(tip);
+    if (tip && !items.some(existing => existing.includes(tip.slice(0, 20)))) items.push(tip);
   }
 
   content.innerHTML = items.length
     ? `<ul class="bullet-list">${items.slice(0, 5).map(i => `<li>${i}</li>`).join('')}</ul>`
     : '<p class="muted-small">Scoring well across the board — no specific weak spot standing out yet. Keep it up.</p>';
+}
+
+// Coaching tips are written as full paragraphs (call-specific context +
+// what to practice) — this pulls just the first sentence and hard-caps
+// length, so the focus card stays short lines, not paragraphs.
+function shortenTip(tip) {
+  if (!tip) return '';
+  const firstSentence = tip.split(/(?<=[.!?])\s/)[0].trim();
+  return firstSentence.length > 90 ? firstSentence.slice(0, 87).trim() + '…' : firstSentence;
 }
 function groupModules() {
   const byCategory = {};
@@ -1345,17 +1357,23 @@ function startGeminiMicCapture() {
   geminiProcessorNode.connect(geminiAudioCtx.destination);
 }
 
+// Box-averaging downsample (each output sample = the average of the input
+// samples it covers) instead of pure linear interpolation. This acts as a
+// simple low-pass/anti-aliasing filter as part of the same pass — plain
+// interpolation with no filtering lets high-frequency content alias into
+// noise once decimated, which was very likely degrading what Gemini
+// actually heard and hurting transcription accuracy.
 function downsampleTo16k(float32Data, inputSampleRate) {
   if (inputSampleRate === 16000) return float32Data;
   const ratio = inputSampleRate / 16000;
-  const newLength = Math.round(float32Data.length / ratio);
+  const newLength = Math.floor(float32Data.length / ratio);
   const result = new Float32Array(newLength);
   for (let i = 0; i < newLength; i++) {
-    const srcIndex = i * ratio;
-    const srcFloor = Math.floor(srcIndex);
-    const srcCeil = Math.min(srcFloor + 1, float32Data.length - 1);
-    const frac = srcIndex - srcFloor;
-    result[i] = float32Data[srcFloor] * (1 - frac) + float32Data[srcCeil] * frac;
+    const start = Math.floor(i * ratio);
+    const end = Math.min(Math.floor((i + 1) * ratio), float32Data.length);
+    let sum = 0, count = 0;
+    for (let j = start; j < end; j++) { sum += float32Data[j]; count++; }
+    result[i] = count ? sum / count : 0;
   }
   return result;
 }
@@ -1379,6 +1397,19 @@ function arrayBufferToBase64(buffer) {
 
 // Plays a base64 24kHz 16-bit PCM chunk, scheduling it right after
 // whatever's already queued so playback is gapless across chunks.
+//
+// JITTER BUFFER: chunks arrive over the network at slightly uneven
+// intervals. If we schedule each one to start exactly when the previous
+// one ends with zero cushion, any small delay in the next chunk arriving
+// means playback "catches up" to real time and leaves an audible gap —
+// this is almost certainly what caused the choppiness. Adding a small
+// buffer (start slightly in the future, not immediately at "now") gives
+// network jitter room to even out before it becomes an audible gap. This
+// trades a little extra latency for smoothness — raise GEMINI_JITTER_MS
+// if it's still choppy, lower it if the delay before speech starts feels
+// too laggy.
+const GEMINI_JITTER_MS = 150;
+
 function playGeminiAudioChunk(base64Data) {
   if (!geminiPlaybackCtx) return;
   const bytes = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
@@ -1393,7 +1424,10 @@ function playGeminiAudioChunk(base64Data) {
   src.connect(geminiPlaybackCtx.destination);
 
   const now = geminiPlaybackCtx.currentTime;
-  const startAt = Math.max(now, geminiNextPlayTime);
+  // Only re-apply the jitter cushion when playback has actually caught up
+  // to (or fallen behind) real time — mid-stream chunks that are already
+  // queued up don't need it, only the chunk right after a gap does.
+  const startAt = geminiNextPlayTime > now ? geminiNextPlayTime : now + GEMINI_JITTER_MS / 1000;
   src.start(startAt);
   geminiNextPlayTime = startAt + audioBuffer.duration;
 }
@@ -1876,18 +1910,18 @@ async function submitPostCallFeedback() {
 async function backToPath() {
   document.getElementById('result-card').style.display = 'none';
   document.getElementById('path-card').style.display = 'block';
+  document.getElementById('focus-card').style.display = 'none';
   const { data: progData } = await sb.from('trainee_progress').select('*').eq('rep_id', repId);
   progressByModule = {};
   (progData || []).forEach(p => progressByModule[p.module_id] = p);
 
-  const { data: attemptData } = await sb.from('training_attempts').select('module_id, overall_score, result_json, created_at').eq('rep_id', repId).eq('status', 'done').order('created_at', { ascending: false });
+  const { data: attemptData } = await sb.from('training_attempts').select('module_id, overall_score').eq('rep_id', repId).eq('status', 'done');
   attemptsByModule = {};
   (attemptData || []).forEach(a => {
     if (a.overall_score == null) return;
     (attemptsByModule[a.module_id] = attemptsByModule[a.module_id] || []).push(a.overall_score);
   });
 
-  renderFocusAreas(attemptData || []);
   renderReadinessMap();
 }
 
