@@ -320,13 +320,6 @@
         <div class="briefing-label">Your opening line for this lead source</div>
         <p id="briefing-opening-text"></p>
       </div>
-      <div class="briefing-row" style="border-top:1px solid var(--border);padding-top:16px;margin-top:8px">
-        <div class="briefing-label">Voice Engine (internal testing)</div>
-        <div class="radio-group" id="engine-select-group">
-          <label class="radio-option selected"><input type="radio" name="call-engine" value="openai" checked onchange="callEngine='openai'; document.querySelectorAll('#engine-select-group .radio-option').forEach(el=>el.classList.remove('selected')); this.closest('.radio-option').classList.add('selected')"> OpenAI (current)</label>
-          <label class="radio-option"><input type="radio" name="call-engine" value="gemini" onchange="callEngine='gemini'; document.querySelectorAll('#engine-select-group .radio-option').forEach(el=>el.classList.remove('selected')); this.closest('.radio-option').classList.add('selected')"> Gemini (experimental)</label>
-        </div>
-      </div>
       <button class="btn btn-primary" style="margin-top:20px" onclick="proceedToCall()">Start Call →</button>
     </div>
 
@@ -712,7 +705,6 @@ const LEAD_SOURCES = {
 
 let callFhName = null, callFhPronunciation = null, callAfpName = null, callLeadSource = null, callDifficultyLevel = null;
 let callAddress = null, callSurveyDate = null, callSurveyDateLabel = null, callAfpAvailableDays = null, callPersonaEmail = null;
-let callEngine = 'openai'; // 'openai' | 'gemini' — set via the briefing screen's engine selector
 
 // Continuous 1-9 difficulty scale, randomly rolled within each tier's band
 // each attempt: tier 1 = 1-2 (easy), tier 2 = 3-5 (moderate), tier 3 = 6-9
@@ -886,34 +878,39 @@ function renderFocusAreas(attempts) {
     Object.keys(RED_FLAG_LABELS).forEach(k => { if (a.result_json[k]) flagCounts[k] = (flagCounts[k] || 0) + 1; });
   });
   Object.entries(flagCounts).sort((a, b) => b[1] - a[1]).slice(0, 2).forEach(([key, count]) => {
+    if (items.length >= 3) return;
     items.push(`${RED_FLAG_LABELS[key]} — came up in ${count} of your last ${doneAttempts.length} scored calls.`);
   });
 
-  // Fill remaining slots with recent coaching tips from their own calls.
-  // Prefers the AI-generated coaching_tip_short (a proper standalone
-  // one-liner written for exactly this use) — older attempts scored before
-  // that field existed fall back to a trimmed first-sentence of the full tip.
+  // Fill any remaining slot(s) with recent coaching tips from their own
+  // calls — shown in FULL, never truncated. coaching_tip_short is already
+  // written to be a short standalone line; for older attempts scored
+  // before that field existed, shortenTip() below pulls one complete
+  // sentence (not a hard character cut), so nothing here ends mid-word.
   const recentTips = doneAttempts
     .map(a => a.result_json.coaching_tip_short || shortenTip(a.result_json.coaching_tip))
     .filter(Boolean);
   for (const tip of recentTips) {
-    if (items.length >= 5) break;
+    if (items.length >= 3) break;
     if (!items.some(existing => existing.includes(tip.slice(0, 20)))) items.push(tip);
   }
 
   content.innerHTML = items.length
-    ? `<ul class="bullet-list">${items.slice(0, 5).map(i => `<li>${i}</li>`).join('')}</ul>`
+    ? `<ul class="bullet-list">${items.slice(0, 3).map(i => `<li>${i}</li>`).join('')}</ul>`
     : '<p class="muted-small">Scoring well across the board — no specific weak spot standing out yet. Keep it up.</p>';
 }
 
 // Fallback ONLY for attempts scored before coaching_tip_short existed —
 // coaching tips are written as full paragraphs (call-specific context +
-// what to practice); this pulls just the first sentence and hard-caps
-// length so old data still renders as a short line, not a paragraph.
+// what to practice). Pulls the first COMPLETE sentence and shows it in
+// full — no character cap, no ellipsis, so nothing ends mid-word. A full
+// sentence is inherently a reasonable length; the old version additionally
+// hard-truncated at 87 characters, which is what was actually causing tips
+// to visibly cut off mid-word with a trailing "…".
 function shortenTip(tip) {
   if (!tip) return '';
   const firstSentence = tip.split(/(?<=[.!?])\s/)[0].trim();
-  return firstSentence.length > 90 ? firstSentence.slice(0, 87).trim() + '…' : firstSentence;
+  return firstSentence;
 }
 function groupModules() {
   const byCategory = {};
@@ -1107,8 +1104,7 @@ function proceedToCall() {
     .map(d => `<span class="afp-day-chip">${d}</span>`).join('');
   document.getElementById('call-info-panel').style.display = 'block';
 
-  if (callEngine === 'gemini') connectGeminiSession();
-  else connectRealtimeSession();
+  connectRealtimeSession();
 }
 
 async function connectRealtimeSession() {
@@ -1267,313 +1263,6 @@ function teardownRealtimeSession() {
   if (remoteAudioEl) { try { remoteAudioEl.pause(); } catch (e) {} remoteAudioEl = null; }
 }
 
-// ═══════════════════════════════════════════════════════════
-// GEMINI LIVE ENGINE (experimental, side-by-side with OpenAI above)
-// ═══════════════════════════════════════════════════════════
-// Architecturally different from the OpenAI path: Gemini Live speaks
-// WebSockets with raw PCM audio, not WebRTC with native media tracks — so
-// unlike the OpenAI integration (where the browser just hands a mic track
-// to RTCPeerConnection and audio "just works"), here WE have to manually
-// capture the mic, downsample it to 16kHz 16-bit PCM, and stream it as
-// base64 chunks — and manually decode + schedule playback of the 24kHz PCM
-// audio Gemini sends back. More moving parts, but it's what the API expects.
-
-let geminiWs = null;
-let geminiAudioCtx = null;        // captures + encodes the mic
-let geminiPlaybackCtx = null;     // decodes + plays Gemini's voice
-let geminiProcessorNode = null;
-let geminiNextPlayTime = 0;
-let geminiPlaybackDest = null;    // MediaStreamDestination — lets echo cancellation "see" the persona's voice
-let geminiRemoteAudioEl = null;   // hidden <audio> element the persona's voice actually plays through
-let geminiPendingInputText = '';
-let geminiPendingOutputText = '';
-
-async function connectGeminiSession() {
-  try {
-    setCallStatus('Connecting...');
-
-    const tokenRes = await fetch('/.netlify/functions/gemini-session', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        personaPrompt: activeModule.persona_prompt,
-        gender: activeModule.gender,
-        fhName: callFhName,
-        fhPronunciation: callFhPronunciation,
-        afpName: callAfpName,
-        leadSource: callLeadSource,
-        tier: activeModule.tier,
-        difficultyLevel: callDifficultyLevel,
-        objectionType: activeModule.objection_type,
-        address: callAddress,
-        surveyDateLabel: callSurveyDateLabel,
-        personaEmail: callPersonaEmail,
-      }),
-    });
-    const tokenData = await tokenRes.json();
-    if (tokenData.error) throw new Error(tokenData.error);
-
-    micStream = await navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation: true, noiseSuppression: true }
-    });
-
-    setupGeminiPlayback();
-
-    // IMPORTANT: ephemeral tokens must connect to the "Constrained" endpoint
-    // specifically — that's the one built for browser clients using
-    // short-lived tokens. The plain (non-Constrained) endpoint is for
-    // server-to-server calls with a raw API key and will not work here.
-    const wsUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContentConstrained?access_token=${tokenData.token}`;
-    geminiWs = new WebSocket(wsUrl);
-
-    geminiWs.onopen = () => {
-      // The persona instructions, voice, and turn-detection tuning are
-      // already locked into the token server-side (liveConnectConstraints)
-      // — this setup message just confirms the session, per the standard
-      // Live API protocol (every session's first message must be a setup).
-      geminiWs.send(JSON.stringify({ setup: { model: `models/${tokenData.model}` } }));
-    };
-
-    geminiWs.onmessage = async (event) => {
-      const text = event.data instanceof Blob ? await event.data.text() : event.data;
-      let msg;
-      try { msg = JSON.parse(text); } catch (e) { return; }
-      handleGeminiMessage(msg);
-    };
-
-    geminiWs.onerror = () => {
-      setVoiceState('paused', 'Error: Gemini connection failed');
-    };
-
-    geminiWs.onclose = (e) => {
-      if (callActive) setVoiceState('paused', 'Gemini connection closed: ' + (e.reason || 'unknown reason'));
-    };
-
-    // Wait for the socket to actually be open before wiring up the mic —
-    // avoids sending audio into a not-yet-ready connection.
-    await new Promise((resolve, reject) => {
-      const check = setInterval(() => {
-        if (geminiWs.readyState === WebSocket.OPEN) { clearInterval(check); resolve(); }
-        if (geminiWs.readyState === WebSocket.CLOSED) { clearInterval(check); reject(new Error('Gemini socket closed before opening')); }
-      }, 50);
-    });
-
-    startGeminiMicCapture();
-    callActive = true;
-    document.getElementById('voice-orb').className = 'voice-orb state-listening';
-    setCallStatus('Call live — just talk naturally');
-
-  } catch (err) {
-    setVoiceState('paused', 'Error: ' + err.message);
-  }
-}
-
-// Captures the mic, downsamples to 16kHz mono, converts to 16-bit PCM, and
-// streams it to Gemini as base64 chunks. Uses ScriptProcessorNode (older,
-// deprecated API, but simple and universally supported) rather than an
-// AudioWorklet — fine for this, but a good upgrade candidate later if this
-// engine becomes the permanent one.
-function startGeminiMicCapture() {
-  geminiAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  const source = geminiAudioCtx.createMediaStreamSource(micStream);
-  geminiProcessorNode = geminiAudioCtx.createScriptProcessor(4096, 1, 1);
-
-  geminiProcessorNode.onaudioprocess = (e) => {
-    if (!geminiWs || geminiWs.readyState !== WebSocket.OPEN) return;
-    const input = e.inputBuffer.getChannelData(0);
-    const downsampled = downsampleTo16k(input, geminiAudioCtx.sampleRate);
-    const pcmBuffer = float32ToInt16PCM(downsampled);
-    const base64Data = arrayBufferToBase64(pcmBuffer);
-    geminiWs.send(JSON.stringify({
-      realtimeInput: { audio: { data: base64Data, mimeType: 'audio/pcm;rate=16000' } },
-    }));
-  };
-
-  source.connect(geminiProcessorNode);
-  geminiProcessorNode.connect(geminiAudioCtx.destination);
-}
-
-// Box-averaging downsample (each output sample = the average of the input
-// samples it covers) instead of pure linear interpolation. This acts as a
-// simple low-pass/anti-aliasing filter as part of the same pass — plain
-// interpolation with no filtering lets high-frequency content alias into
-// noise once decimated, which was very likely degrading what Gemini
-// actually heard and hurting transcription accuracy.
-function downsampleTo16k(float32Data, inputSampleRate) {
-  if (inputSampleRate === 16000) return float32Data;
-  const ratio = inputSampleRate / 16000;
-  const newLength = Math.floor(float32Data.length / ratio);
-  const result = new Float32Array(newLength);
-  for (let i = 0; i < newLength; i++) {
-    const start = Math.floor(i * ratio);
-    const end = Math.min(Math.floor((i + 1) * ratio), float32Data.length);
-    let sum = 0, count = 0;
-    for (let j = start; j < end; j++) { sum += float32Data[j]; count++; }
-    result[i] = count ? sum / count : 0;
-  }
-  return result;
-}
-
-function float32ToInt16PCM(float32Data) {
-  const buf = new ArrayBuffer(float32Data.length * 2);
-  const view = new DataView(buf);
-  for (let i = 0; i < float32Data.length; i++) {
-    const s = Math.max(-1, Math.min(1, float32Data[i]));
-    view.setInt16(i * 2, s < 0 ? s * 0x8000 : s * 0x7FFF, true); // little-endian
-  }
-  return buf;
-}
-
-function arrayBufferToBase64(buffer) {
-  let binary = '';
-  const bytes = new Uint8Array(buffer);
-  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
-  return btoa(binary);
-}
-
-// JITTER BUFFER: chunks arrive over the network at slightly uneven
-// intervals. If we schedule each one to start exactly when the previous
-// one ends with zero cushion, any small delay in the next chunk arriving
-// means playback "catches up" to real time and leaves an audible gap.
-// Raised from 150ms → 350ms: the extra cushion adds a barely-noticeable
-// delay before the persona starts speaking but absorbs much larger
-// network hiccups mid-sentence. Raise further if still choppy.
-const GEMINI_JITTER_MS = 350;
-
-// Sources currently scheduled/playing — tracked so barge-in can stop them
-// individually instead of destroying and recreating the whole AudioContext
-// (the old approach), which itself caused an audible glitch every time.
-let geminiActiveSources = [];
-
-// CRITICAL ECHO-CANCELLATION FIX: previously Gemini's voice was connected
-// straight to geminiPlaybackCtx.destination (raw Web Audio output). Chrome's
-// echo canceller frequently CANNOT reference audio played that way — it only
-// reliably cancels sound played through a standard <audio>/media element.
-// The result: the persona's own voice leaked from the speakers into the mic,
-// Gemini's server-side voice detection heard it as the rep talking, fired
-// "interrupted", and the code hard-stopped playback mid-sentence — over and
-// over. That feedback loop is the most likely cause of the constant
-// cutting-off. Fix: play through a MediaStreamDestination piped into a
-// hidden <audio> element, the same media path the OpenAI/WebRTC engine uses,
-// which the echo canceller handles correctly.
-function setupGeminiPlayback() {
-  geminiPlaybackCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
-  geminiPlaybackDest = geminiPlaybackCtx.createMediaStreamDestination();
-  geminiRemoteAudioEl = new Audio();
-  geminiRemoteAudioEl.srcObject = geminiPlaybackDest.stream;
-  geminiRemoteAudioEl.autoplay = true;
-  geminiNextPlayTime = 0;
-  geminiActiveSources = [];
-  // Some browsers suspend a fresh AudioContext until a user gesture —
-  // starting a call IS a gesture, but resume defensively anyway.
-  if (geminiPlaybackCtx.state === 'suspended') geminiPlaybackCtx.resume();
-}
-
-function playGeminiAudioChunk(base64Data) {
-  if (!geminiPlaybackCtx || !geminiPlaybackDest) return;
-  const bytes = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
-  const int16 = new Int16Array(bytes.buffer, bytes.byteOffset, Math.floor(bytes.length / 2));
-  const float32 = new Float32Array(int16.length);
-  for (let i = 0; i < int16.length; i++) float32[i] = int16[i] / 32768;
-
-  const audioBuffer = geminiPlaybackCtx.createBuffer(1, float32.length, 24000);
-  audioBuffer.copyToChannel(float32, 0);
-  const src = geminiPlaybackCtx.createBufferSource();
-  src.buffer = audioBuffer;
-  src.connect(geminiPlaybackDest);
-
-  const now = geminiPlaybackCtx.currentTime;
-  // Only re-apply the jitter cushion when playback has actually caught up
-  // to (or fallen behind) real time — mid-stream chunks that are already
-  // queued up don't need it, only the chunk right after a gap does.
-  const startAt = geminiNextPlayTime > now ? geminiNextPlayTime : now + GEMINI_JITTER_MS / 1000;
-  src.start(startAt);
-  geminiNextPlayTime = startAt + audioBuffer.duration;
-
-  geminiActiveSources.push(src);
-  src.onended = () => {
-    const idx = geminiActiveSources.indexOf(src);
-    if (idx !== -1) geminiActiveSources.splice(idx, 1);
-  };
-}
-
-// Stops queued/in-flight persona audio on barge-in by stopping each
-// scheduled source individually. The old version closed and recreated the
-// entire AudioContext, which added its own audible pop and a brief dead
-// zone at the start of the persona's next turn.
-function stopGeminiPlayback() {
-  geminiActiveSources.forEach(src => { try { src.stop(); } catch (e) {} });
-  geminiActiveSources = [];
-  geminiNextPlayTime = 0;
-}
-
-// NOTE ON TRANSCRIPTS: Gemini's docs show inputTranscription/outputTranscription
-// text without fully clarifying whether each message carries the FULL
-// current-turn text or just an incremental delta. This treats each one as
-// the latest full text for that turn (safer default); if bubbles end up
-// duplicated or truncated in testing, this is the first place to adjust —
-// switch the assignments below to append (+=) instead of replace.
-function handleGeminiMessage(msg) {
-  if (msg.setupComplete) return;
-
-  if (msg.serverContent) {
-    const sc = msg.serverContent;
-
-    if (sc.interrupted) {
-      stopGeminiPlayback();
-      geminiPendingOutputText = '';
-    }
-
-    if (sc.inputTranscription && sc.inputTranscription.text) {
-      geminiPendingInputText = sc.inputTranscription.text;
-      setVoiceState('hearing', 'Hearing you...');
-    }
-
-    if (sc.outputTranscription && sc.outputTranscription.text) {
-      geminiPendingOutputText = sc.outputTranscription.text;
-      setVoiceState('speaking', `${activeModule.persona_name} is speaking...`);
-    }
-
-    if (sc.modelTurn && sc.modelTurn.parts) {
-      sc.modelTurn.parts.forEach(part => {
-        if (part.inlineData && part.inlineData.data) playGeminiAudioChunk(part.inlineData.data);
-      });
-    }
-
-    if (sc.turnComplete) {
-      if (geminiPendingInputText.trim()) {
-        addBubble('rep', geminiPendingInputText.trim());
-        conversationHistory.push({ speaker: 'rep', text: geminiPendingInputText.trim() });
-        geminiPendingInputText = '';
-      }
-      if (geminiPendingOutputText.trim()) {
-        addBubble('prospect', geminiPendingOutputText.trim());
-        conversationHistory.push({ speaker: 'prospect', text: geminiPendingOutputText.trim() });
-        geminiPendingOutputText = '';
-      }
-      setVoiceState('listening', 'Call live — just talk naturally');
-    }
-  }
-
-  if (msg.error) {
-    setVoiceState('paused', 'Error: ' + (msg.error.message || 'Unknown Gemini error'));
-  }
-}
-
-function teardownGeminiSession() {
-  callActive = false;
-  if (geminiProcessorNode) { try { geminiProcessorNode.disconnect(); } catch (e) {} geminiProcessorNode = null; }
-  if (geminiAudioCtx) { try { geminiAudioCtx.close(); } catch (e) {} geminiAudioCtx = null; }
-  geminiActiveSources.forEach(src => { try { src.stop(); } catch (e) {} });
-  geminiActiveSources = [];
-  if (geminiRemoteAudioEl) { try { geminiRemoteAudioEl.pause(); geminiRemoteAudioEl.srcObject = null; } catch (e) {} geminiRemoteAudioEl = null; }
-  geminiPlaybackDest = null;
-  if (geminiPlaybackCtx) { try { geminiPlaybackCtx.close(); } catch (e) {} geminiPlaybackCtx = null; }
-  if (geminiWs) { try { geminiWs.close(); } catch (e) {} geminiWs = null; }
-  if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
-  geminiPendingInputText = '';
-  geminiPendingOutputText = '';
-}
-
 function toggleCallFeedback() {
   const box = document.getElementById('call-feedback-box');
   box.style.display = box.style.display === 'none' ? 'block' : 'none';
@@ -1595,8 +1284,7 @@ async function submitCallFeedback() {
 
 function endCallManually() {
   if (conversationHistory.length === 0) { alert('Have at least one exchange before ending the call.'); return; }
-  if (callEngine === 'gemini') teardownGeminiSession();
-  else teardownRealtimeSession();
+  teardownRealtimeSession();
   document.getElementById('call-card').style.display = 'none';
   document.getElementById('call-info-panel').style.display = 'none';
   setupPlanner();
