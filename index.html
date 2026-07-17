@@ -260,6 +260,13 @@
     </div>
 
     <!-- Step: readiness map -->
+    <!-- Rep's own focus summary — what to work on, based on their own past attempts -->
+    <div class="card" id="focus-card" style="display:none">
+      <div class="card-title">Your Focus Areas</div>
+      <p class="muted-small" style="margin-bottom:14px">Based on your last several scored role-plays.</p>
+      <div id="focus-content"></div>
+    </div>
+
     <div class="card" id="path-card" style="display:none">
       <div class="readiness-header">
         <div>
@@ -803,17 +810,65 @@ async function loadPath() {
   progressByModule = {};
   (progData || []).forEach(p => progressByModule[p.module_id] = p);
 
-  const { data: attemptData } = await sb.from('training_attempts').select('module_id, overall_score').eq('rep_id', repId).eq('status', 'done');
+  const { data: attemptData } = await sb.from('training_attempts').select('module_id, overall_score, result_json, created_at').eq('rep_id', repId).eq('status', 'done').order('created_at', { ascending: false });
   attemptsByModule = {};
   (attemptData || []).forEach(a => {
     if (a.overall_score == null) return;
     (attemptsByModule[a.module_id] = attemptsByModule[a.module_id] || []).push(a.overall_score);
   });
 
+  renderFocusAreas(attemptData || []);
   renderReadinessMap();
 }
 
-// Groups modules by category_label, sorted by tier within each category.
+// Rep-facing (not manager) summary: 3-5 things worth working on, drawn from
+// this rep's own recent scored attempts — their weakest scoring dimension
+// plus concrete coaching notes already generated for their own calls.
+function renderFocusAreas(attempts) {
+  const card = document.getElementById('focus-card');
+  const content = document.getElementById('focus-content');
+  const doneAttempts = attempts.filter(a => a.result_json);
+  if (doneAttempts.length < 2) { card.style.display = 'none'; return; } // not enough history yet to be useful
+  card.style.display = 'block';
+
+  const dims = [
+    { key: 'conversation_quality_score', label: 'Conversation Quality' },
+    { key: 'script_adherence_score', label: 'Script Adherence' },
+    { key: 'question_quality_score', label: 'Question Quality' },
+    { key: 'appointment_quality_score', label: 'Appointment Quality' },
+  ];
+  const dimAverages = dims.map(d => {
+    const vals = doneAttempts.map(a => a.result_json[d.key]).filter(v => v != null);
+    return vals.length ? { label: d.label, avg: vals.reduce((a, b) => a + b, 0) / vals.length } : null;
+  }).filter(Boolean).sort((a, b) => a.avg - b.avg);
+
+  const items = [];
+
+  // Lead with the weakest scoring dimension, if it's genuinely a weak spot
+  if (dimAverages.length && dimAverages[0].avg < 7) {
+    items.push(`<strong>${dimAverages[0].label}</strong> is your lowest-scoring area right now (avg ${dimAverages[0].avg.toFixed(1)}/10) — worth deliberately practicing this on your next few calls.`);
+  }
+
+  // Pull the most common/recent red flags across this rep's own calls
+  const flagCounts = {};
+  doneAttempts.forEach(a => {
+    Object.keys(RED_FLAG_LABELS).forEach(k => { if (a.result_json[k]) flagCounts[k] = (flagCounts[k] || 0) + 1; });
+  });
+  Object.entries(flagCounts).sort((a, b) => b[1] - a[1]).slice(0, 2).forEach(([key, count]) => {
+    items.push(`${RED_FLAG_LABELS[key]} — came up in ${count} of your last ${doneAttempts.length} scored calls.`);
+  });
+
+  // Fill remaining slots with recent, specific coaching tips from their own calls
+  const recentTips = doneAttempts.filter(a => a.result_json.coaching_tip).map(a => a.result_json.coaching_tip);
+  for (const tip of recentTips) {
+    if (items.length >= 5) break;
+    if (!items.some(existing => existing.includes(tip.slice(0, 30)))) items.push(tip);
+  }
+
+  content.innerHTML = items.length
+    ? `<ul class="bullet-list">${items.slice(0, 5).map(i => `<li>${i}</li>`).join('')}</ul>`
+    : '<p class="muted-small">Scoring well across the board — no specific weak spot standing out yet. Keep it up.</p>';
+}
 function groupModules() {
   const byCategory = {};
   modules.forEach(m => {
@@ -1216,7 +1271,11 @@ async function connectGeminiSession() {
     geminiPlaybackCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
     geminiNextPlayTime = 0;
 
-    const wsUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?access_token=${tokenData.token}`;
+    // IMPORTANT: ephemeral tokens must connect to the "Constrained" endpoint
+    // specifically — that's the one built for browser clients using
+    // short-lived tokens. The plain (non-Constrained) endpoint is for
+    // server-to-server calls with a raw API key and will not work here.
+    const wsUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContentConstrained?access_token=${tokenData.token}`;
     geminiWs = new WebSocket(wsUrl);
 
     geminiWs.onopen = () => {
@@ -1821,13 +1880,14 @@ async function backToPath() {
   progressByModule = {};
   (progData || []).forEach(p => progressByModule[p.module_id] = p);
 
-  const { data: attemptData } = await sb.from('training_attempts').select('module_id, overall_score').eq('rep_id', repId).eq('status', 'done');
+  const { data: attemptData } = await sb.from('training_attempts').select('module_id, overall_score, result_json, created_at').eq('rep_id', repId).eq('status', 'done').order('created_at', { ascending: false });
   attemptsByModule = {};
   (attemptData || []).forEach(a => {
     if (a.overall_score == null) return;
     (attemptsByModule[a.module_id] = attemptsByModule[a.module_id] || []).push(a.overall_score);
   });
 
+  renderFocusAreas(attemptData || []);
   renderReadinessMap();
 }
 
