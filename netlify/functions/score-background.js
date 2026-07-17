@@ -182,7 +182,7 @@ Respond with ONLY this JSON object, no markdown fences, no preamble:
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
-        max_tokens: 2000,
+        max_tokens: 4096,
         system: systemPrompt,
         messages: [{ role: 'user', content: userContent }],
       }),
@@ -200,13 +200,38 @@ Respond with ONLY this JSON object, no markdown fences, no preamble:
     const clean = raw.replace(/```json|```/g, '').trim();
     const start = clean.indexOf('{');
     const end = clean.lastIndexOf('}');
+
+    // stop_reason === 'max_tokens' means Claude's response was cut off before
+    // it finished — this is the most likely reason start/end come back
+    // pointing at an incomplete object (or no closing brace at all). Surfacing
+    // this distinctly (rather than the old generic "invalid JSON") means if
+    // it ever happens again, the error itself tells you to raise max_tokens
+    // further rather than making you guess.
     if (start === -1 || end === -1) {
-      await sbPatch('trainer_score_jobs', jobId, { status: 'error', error: 'AI returned invalid JSON' });
-      if (attemptId) await sbPatch('training_attempts', attemptId, { status: 'error', error: 'AI returned invalid JSON' });
+      const reason = data.stop_reason === 'max_tokens'
+        ? 'AI response was cut off (hit max_tokens) before completing the JSON — try raising max_tokens further'
+        : 'AI returned invalid JSON (no JSON object found in response)';
+      await sbPatch('trainer_score_jobs', jobId, { status: 'error', error: reason });
+      if (attemptId) await sbPatch('training_attempts', attemptId, { status: 'error', error: reason });
       return;
     }
 
-    const result = JSON.parse(clean.slice(start, end + 1));
+    let result;
+    try {
+      result = JSON.parse(clean.slice(start, end + 1));
+    } catch (parseErr) {
+      // The braces were found but the content between them didn't parse —
+      // this really is malformed JSON (as opposed to simple truncation above).
+      // Still worth flagging stop_reason here too, since a truncation that
+      // happens to cut off mid-field (rather than before the final brace)
+      // would also land in this branch.
+      const reason = data.stop_reason === 'max_tokens'
+        ? `AI response was cut off (hit max_tokens) mid-JSON: ${parseErr.message}`
+        : `AI returned invalid JSON: ${parseErr.message}`;
+      await sbPatch('trainer_score_jobs', jobId, { status: 'error', error: reason });
+      if (attemptId) await sbPatch('training_attempts', attemptId, { status: 'error', error: reason });
+      return;
+    }
 
     await sbPatch('trainer_score_jobs', jobId, { status: 'done', result_json: result });
 
