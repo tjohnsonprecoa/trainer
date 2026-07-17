@@ -824,6 +824,30 @@ async function loadPath() {
 // Rep-facing (not manager) summary: 3-5 things worth working on, drawn from
 // this rep's own recent scored attempts — their weakest scoring dimension
 // plus concrete coaching notes already generated for their own calls.
+// Concrete example questions/prompts per weak dimension — grounded in
+// patterns that actually worked in real high-scoring calls, not generic
+// advice. Shown alongside the weakest-dimension callout so it's paired
+// with something immediately actionable, not just a score to feel bad about.
+const DIMENSION_TIPS = {
+  'Question Quality': [
+    '"What\u2019s the most important reason you\u2019re looking into this now?"',
+    '"Who would this affect most if it wasn\u2019t taken care of?"',
+    '"Has your family been through this before? What was that like?"',
+  ],
+  'Conversation Quality': [
+    'Slow down after asking a question — let a full answer land before moving to the next topic.',
+    'Match their energy: a quieter, more serious caller usually wants a calmer pace, not more enthusiasm.',
+  ],
+  'Script Adherence': [
+    'Cover these in order: intro + funeral home name → why you\u2019re reaching out → Final Wishes Organizer → a specific appointment ask.',
+    'Don\u2019t skip the motivation question just because someone sounds ready to schedule quickly.',
+  ],
+  'Appointment Quality': [
+    'Before ending the call: confirm date/time, address, phone, email, and who\u2019s attending (spouse name too, if there is one).',
+    'State the appointment is about an hour — never let it sound like a quick drop-by.',
+  ],
+};
+
 function renderFocusAreas(attempts) {
   const card = document.getElementById('focus-card');
   const content = document.getElementById('focus-content');
@@ -844,9 +868,16 @@ function renderFocusAreas(attempts) {
 
   const items = [];
 
-  // Lead with the weakest scoring dimension, if it's genuinely a weak spot
+  // Lead with the weakest scoring dimension, if it's genuinely a weak spot —
+  // paired with a couple of concrete example questions/prompts for that
+  // specific dimension, not just "practice this."
   if (dimAverages.length && dimAverages[0].avg < 7) {
-    items.push(`<strong>${dimAverages[0].label}</strong> is your lowest-scoring area right now (avg ${dimAverages[0].avg.toFixed(1)}/10) — worth deliberately practicing this on your next few calls.`);
+    const weakest = dimAverages[0];
+    const suggestions = DIMENSION_TIPS[weakest.label] || [];
+    const suggestionsHtml = suggestions.length
+      ? `<ul class="bullet-list" style="margin-top:6px">${suggestions.map(s => `<li>${s}</li>`).join('')}</ul>`
+      : '';
+    items.push(`<strong>${weakest.label}</strong> is your lowest-scoring area right now (avg ${weakest.avg.toFixed(1)}/10). Try working these in:${suggestionsHtml}`);
   }
 
   // Pull the most common/recent red flags across this rep's own calls
@@ -858,14 +889,16 @@ function renderFocusAreas(attempts) {
     items.push(`${RED_FLAG_LABELS[key]} — came up in ${count} of your last ${doneAttempts.length} scored calls.`);
   });
 
-  // Fill remaining slots with recent coaching tips from their own calls —
-  // shortened to a single short line, since coaching_tip is written as a
-  // full paragraph (what happened + what to practice) and this card is
-  // meant to be scannable at a glance, not another paragraph to read.
-  const recentTips = doneAttempts.filter(a => a.result_json.coaching_tip).map(a => shortenTip(a.result_json.coaching_tip));
+  // Fill remaining slots with recent coaching tips from their own calls.
+  // Prefers the AI-generated coaching_tip_short (a proper standalone
+  // one-liner written for exactly this use) — older attempts scored before
+  // that field existed fall back to a trimmed first-sentence of the full tip.
+  const recentTips = doneAttempts
+    .map(a => a.result_json.coaching_tip_short || shortenTip(a.result_json.coaching_tip))
+    .filter(Boolean);
   for (const tip of recentTips) {
     if (items.length >= 5) break;
-    if (tip && !items.some(existing => existing.includes(tip.slice(0, 20)))) items.push(tip);
+    if (!items.some(existing => existing.includes(tip.slice(0, 20)))) items.push(tip);
   }
 
   content.innerHTML = items.length
@@ -873,9 +906,10 @@ function renderFocusAreas(attempts) {
     : '<p class="muted-small">Scoring well across the board — no specific weak spot standing out yet. Keep it up.</p>';
 }
 
-// Coaching tips are written as full paragraphs (call-specific context +
-// what to practice) — this pulls just the first sentence and hard-caps
-// length, so the focus card stays short lines, not paragraphs.
+// Fallback ONLY for attempts scored before coaching_tip_short existed —
+// coaching tips are written as full paragraphs (call-specific context +
+// what to practice); this pulls just the first sentence and hard-caps
+// length so old data still renders as a short line, not a paragraph.
 function shortenTip(tip) {
   if (!tip) return '';
   const firstSentence = tip.split(/(?<=[.!?])\s/)[0].trim();
@@ -1249,6 +1283,8 @@ let geminiAudioCtx = null;        // captures + encodes the mic
 let geminiPlaybackCtx = null;     // decodes + plays Gemini's voice
 let geminiProcessorNode = null;
 let geminiNextPlayTime = 0;
+let geminiPlaybackDest = null;    // MediaStreamDestination — lets echo cancellation "see" the persona's voice
+let geminiRemoteAudioEl = null;   // hidden <audio> element the persona's voice actually plays through
 let geminiPendingInputText = '';
 let geminiPendingOutputText = '';
 
@@ -1280,8 +1316,7 @@ async function connectGeminiSession() {
       audio: { echoCancellation: true, noiseSuppression: true }
     });
 
-    geminiPlaybackCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
-    geminiNextPlayTime = 0;
+    setupGeminiPlayback();
 
     // IMPORTANT: ephemeral tokens must connect to the "Constrained" endpoint
     // specifically — that's the one built for browser clients using
@@ -1395,23 +1430,46 @@ function arrayBufferToBase64(buffer) {
   return btoa(binary);
 }
 
-// Plays a base64 24kHz 16-bit PCM chunk, scheduling it right after
-// whatever's already queued so playback is gapless across chunks.
-//
 // JITTER BUFFER: chunks arrive over the network at slightly uneven
 // intervals. If we schedule each one to start exactly when the previous
 // one ends with zero cushion, any small delay in the next chunk arriving
-// means playback "catches up" to real time and leaves an audible gap —
-// this is almost certainly what caused the choppiness. Adding a small
-// buffer (start slightly in the future, not immediately at "now") gives
-// network jitter room to even out before it becomes an audible gap. This
-// trades a little extra latency for smoothness — raise GEMINI_JITTER_MS
-// if it's still choppy, lower it if the delay before speech starts feels
-// too laggy.
-const GEMINI_JITTER_MS = 150;
+// means playback "catches up" to real time and leaves an audible gap.
+// Raised from 150ms → 350ms: the extra cushion adds a barely-noticeable
+// delay before the persona starts speaking but absorbs much larger
+// network hiccups mid-sentence. Raise further if still choppy.
+const GEMINI_JITTER_MS = 350;
+
+// Sources currently scheduled/playing — tracked so barge-in can stop them
+// individually instead of destroying and recreating the whole AudioContext
+// (the old approach), which itself caused an audible glitch every time.
+let geminiActiveSources = [];
+
+// CRITICAL ECHO-CANCELLATION FIX: previously Gemini's voice was connected
+// straight to geminiPlaybackCtx.destination (raw Web Audio output). Chrome's
+// echo canceller frequently CANNOT reference audio played that way — it only
+// reliably cancels sound played through a standard <audio>/media element.
+// The result: the persona's own voice leaked from the speakers into the mic,
+// Gemini's server-side voice detection heard it as the rep talking, fired
+// "interrupted", and the code hard-stopped playback mid-sentence — over and
+// over. That feedback loop is the most likely cause of the constant
+// cutting-off. Fix: play through a MediaStreamDestination piped into a
+// hidden <audio> element, the same media path the OpenAI/WebRTC engine uses,
+// which the echo canceller handles correctly.
+function setupGeminiPlayback() {
+  geminiPlaybackCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
+  geminiPlaybackDest = geminiPlaybackCtx.createMediaStreamDestination();
+  geminiRemoteAudioEl = new Audio();
+  geminiRemoteAudioEl.srcObject = geminiPlaybackDest.stream;
+  geminiRemoteAudioEl.autoplay = true;
+  geminiNextPlayTime = 0;
+  geminiActiveSources = [];
+  // Some browsers suspend a fresh AudioContext until a user gesture —
+  // starting a call IS a gesture, but resume defensively anyway.
+  if (geminiPlaybackCtx.state === 'suspended') geminiPlaybackCtx.resume();
+}
 
 function playGeminiAudioChunk(base64Data) {
-  if (!geminiPlaybackCtx) return;
+  if (!geminiPlaybackCtx || !geminiPlaybackDest) return;
   const bytes = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
   const int16 = new Int16Array(bytes.buffer, bytes.byteOffset, Math.floor(bytes.length / 2));
   const float32 = new Float32Array(int16.length);
@@ -1421,7 +1479,7 @@ function playGeminiAudioChunk(base64Data) {
   audioBuffer.copyToChannel(float32, 0);
   const src = geminiPlaybackCtx.createBufferSource();
   src.buffer = audioBuffer;
-  src.connect(geminiPlaybackCtx.destination);
+  src.connect(geminiPlaybackDest);
 
   const now = geminiPlaybackCtx.currentTime;
   // Only re-apply the jitter cushion when playback has actually caught up
@@ -1430,14 +1488,21 @@ function playGeminiAudioChunk(base64Data) {
   const startAt = geminiNextPlayTime > now ? geminiNextPlayTime : now + GEMINI_JITTER_MS / 1000;
   src.start(startAt);
   geminiNextPlayTime = startAt + audioBuffer.duration;
+
+  geminiActiveSources.push(src);
+  src.onended = () => {
+    const idx = geminiActiveSources.indexOf(src);
+    if (idx !== -1) geminiActiveSources.splice(idx, 1);
+  };
 }
 
-// Hard-stops any in-flight/queued audio immediately — used on barge-in
-// (the rep interrupting the persona) since we don't keep references to
-// every scheduled chunk to stop them individually.
+// Stops queued/in-flight persona audio on barge-in by stopping each
+// scheduled source individually. The old version closed and recreated the
+// entire AudioContext, which added its own audible pop and a brief dead
+// zone at the start of the persona's next turn.
 function stopGeminiPlayback() {
-  if (geminiPlaybackCtx) { try { geminiPlaybackCtx.close(); } catch (e) {} }
-  geminiPlaybackCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
+  geminiActiveSources.forEach(src => { try { src.stop(); } catch (e) {} });
+  geminiActiveSources = [];
   geminiNextPlayTime = 0;
 }
 
@@ -1498,6 +1563,10 @@ function teardownGeminiSession() {
   callActive = false;
   if (geminiProcessorNode) { try { geminiProcessorNode.disconnect(); } catch (e) {} geminiProcessorNode = null; }
   if (geminiAudioCtx) { try { geminiAudioCtx.close(); } catch (e) {} geminiAudioCtx = null; }
+  geminiActiveSources.forEach(src => { try { src.stop(); } catch (e) {} });
+  geminiActiveSources = [];
+  if (geminiRemoteAudioEl) { try { geminiRemoteAudioEl.pause(); geminiRemoteAudioEl.srcObject = null; } catch (e) {} geminiRemoteAudioEl = null; }
+  geminiPlaybackDest = null;
   if (geminiPlaybackCtx) { try { geminiPlaybackCtx.close(); } catch (e) {} geminiPlaybackCtx = null; }
   if (geminiWs) { try { geminiWs.close(); } catch (e) {} geminiWs = null; }
   if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
