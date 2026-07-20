@@ -204,6 +204,10 @@
   .rep-row-stats { margin-left: auto; text-align: right; }
   .rep-row-pct { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 18px; }
   .rep-row-tier { font-size: 11px; color: var(--muted); }
+  .team-group { margin-bottom: 24px; }
+  .team-group-header { display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+  .team-group-name { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 15px; }
+  .team-group-count { font-size: 12px; color: var(--muted); }
   .insight-row { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 8px; }
   .insight-row-label { flex: 1; font-size: 13px; }
   .insight-row-sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
@@ -1765,7 +1769,22 @@ async function renderDashboard() {
   const reps = Object.values(byRep);
   if (!reps.length) { body.innerHTML = '<p class="muted-small">No reps have started practicing yet.</p>'; return; }
 
-  body.innerHTML = reps.map(r => {
+  // Group reps by team. Reps with no team on file fall into "Unassigned"
+  // and always sort last so real teams stay at the top.
+  const byTeam = {};
+  reps.forEach(r => {
+    const teamName = r.team || 'Unassigned';
+    if (!byTeam[teamName]) byTeam[teamName] = [];
+    byTeam[teamName].push(r);
+  });
+  const teamNames = Object.keys(byTeam).sort((a, b) => {
+    if (a === 'Unassigned') return 1;
+    if (b === 'Unassigned') return -1;
+    return a.localeCompare(b);
+  });
+
+  const maxTier = Math.max(...allModulesList.map(m => m.tier), 1);
+  const renderRepRow = (r) => {
     const passedCount = r.rows.filter(row => row.status === 'passed').length;
     const totalCount = allModulesList.length || 1;
     const pct = Math.round((passedCount / totalCount) * 100);
@@ -1780,12 +1799,24 @@ async function renderDashboard() {
       <div class="rep-row" onclick="openRepProfile('${r.repId.replace(/'/g,"\\'")}')">
         <div>
           <div class="rep-row-name">${escapeHtml(r.repId)}</div>
-          <div class="rep-row-sub">${escapeHtml(r.team || '')} · last activity ${r.lastActivity ? new Date(r.lastActivity).toLocaleDateString() : '—'}</div>
+          <div class="rep-row-sub">last activity ${r.lastActivity ? new Date(r.lastActivity).toLocaleDateString() : '—'}</div>
         </div>
         <div class="rep-row-stats">
           <div class="rep-row-pct" style="color:${pct === 100 ? 'var(--green)' : 'var(--accent)'}">${pct === 100 ? '🎓' : pct + '%'}</div>
-          <div class="rep-row-tier">Tier ${currentTier} of ${Math.max(...allModulesList.map(m => m.tier), 1)}</div>
+          <div class="rep-row-tier">Tier ${currentTier} of ${maxTier}</div>
         </div>
+      </div>`;
+  };
+
+  body.innerHTML = teamNames.map(teamName => {
+    const teamReps = byTeam[teamName].sort((a, b) => a.repId.localeCompare(b.repId));
+    return `
+      <div class="team-group">
+        <div class="team-group-header">
+          <div class="team-group-name">${escapeHtml(teamName)}</div>
+          <div class="team-group-count">${teamReps.length} rep${teamReps.length === 1 ? '' : 's'}</div>
+        </div>
+        ${teamReps.map(renderRepRow).join('')}
       </div>`;
   }).join('');
 }

@@ -72,12 +72,32 @@ exports.handler = async (event) => {
               // headsets — filters background noise BEFORE it reaches VAD,
               // directly reducing false "user is speaking" triggers.
               noise_reduction: { type: 'far_field' },
-              // eagerness 'low' makes the model wait longer / need clearer
-              // signal before deciding the rep is talking or interrupting —
-              // trades a little latency for fewer false interruptions from
-              // background noise, breathing, etc. Raise to 'medium'/'auto'
-              // if it starts feeling sluggish to respond once tuned.
-              turn_detection: { type: 'semantic_vad', eagerness: 'low', interrupt_response: true },
+              // SWITCHED FROM semantic_vad → server_vad. semantic_vad's only
+              // dial is `eagerness`, which controls how long the model waits
+              // before deciding the rep is DONE talking — it has no volume/
+              // loudness threshold for deciding when speech STARTS. It was
+              // already set to 'low' (its least-sensitive option) and the
+              // persona's audio was still falsely triggering "user started
+              // speaking" mid-response, cutting the audio while the transcript
+              // (already fully generated) kept the complete text. There was no
+              // further headroom left in semantic_vad to fix that.
+              // server_vad exposes an actual loudness threshold (0.0-1.0,
+              // default 0.5) — raised here to 0.7 so a quiet echo/background
+              // noise needs real volume before it's read as the rep talking,
+              // while a rep actually speaking at normal volume still triggers
+              // normally. prefix_padding_ms/silence_duration_ms raised
+              // slightly above default too, giving a bit more buffer around
+              // both ends of a genuine turn. If reps start feeling like the
+              // persona doesn't respond fast enough to real interruptions,
+              // lower threshold back toward 0.5-0.6 first before touching
+              // the other two.
+              turn_detection: {
+                type: 'server_vad',
+                threshold: 0.7,
+                prefix_padding_ms: 300,
+                silence_duration_ms: 500,
+                interrupt_response: true,
+              },
             },
             output: { voice },
           },
