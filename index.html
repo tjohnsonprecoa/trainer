@@ -1144,12 +1144,35 @@ async function connectRealtimeSession() {
 
     pc.addTrack(micStream.getTracks()[0]);
 
+    // CONNECTION-DROP DETECTION: previously nothing here monitored the
+    // connection after setup — if it dropped mid-call (network blip, ICE
+    // failure, server-side timeout) the call just went silent with zero
+    // explanation. This surfaces it clearly instead, and flips callActive
+    // off so the UI doesn't keep pretending the call is live.
+    pc.oniceconnectionstatechange = () => {
+      if (['disconnected', 'failed', 'closed'].includes(pc.iceConnectionState) && callActive) {
+        callActive = false;
+        document.getElementById('voice-orb').className = 'voice-orb state-paused';
+        setCallStatus(`Connection lost (${pc.iceConnectionState}) — end this call and start a new one`);
+      }
+    };
+
     dataChannel = pc.createDataChannel('oai-events');
     dataChannel.addEventListener('message', handleRealtimeEvent);
     dataChannel.addEventListener('open', () => {
       callActive = true;
       document.getElementById('voice-orb').className = 'voice-orb state-listening';
       setCallStatus('Call live — just talk naturally');
+    });
+    dataChannel.addEventListener('close', () => {
+      if (callActive) {
+        callActive = false;
+        document.getElementById('voice-orb').className = 'voice-orb state-paused';
+        setCallStatus('Connection lost (data channel closed) — end this call and start a new one');
+      }
+    });
+    dataChannel.addEventListener('error', () => {
+      setCallStatus('Connection unstable — if the call cuts out, end it and start a new one');
     });
 
     const offer = await pc.createOffer();
@@ -1218,6 +1241,21 @@ function handleRealtimeEvent(e) {
     case 'response.done':
       document.getElementById('voice-orb').className = 'voice-orb state-listening';
       setCallStatus('Call live — just talk naturally');
+
+      // If a response gets cut off for hitting an output-token cap, OpenAI
+      // reports status:'incomplete' with a reason here — this is the
+      // Realtime-API equivalent of the max_tokens bug already found in
+      // score-background.js. Surfacing it distinctly means a mid-sentence
+      // cutoff shows up as a diagnosable, specific cause instead of just
+      // looking like a random dropout.
+      if (evt.response?.status === 'incomplete') {
+        const reason = evt.response?.status_details?.reason || 'unknown';
+        console.warn('Realtime response truncated:', reason, evt.response);
+        if (reason === 'max_output_tokens') {
+          setCallStatus(`${activeModule.persona_name}'s response was cut off (hit output token limit) — see realtime-session.js`);
+        }
+      }
+
       // Fallback: if no delta/done transcript events were caught above (API
       // surface mismatch), try to recover the assistant's text directly from
       // the full response payload so scoring still gets a transcript.
