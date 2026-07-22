@@ -1136,9 +1136,20 @@ async function connectRealtimeSession() {
     if (tokenData.error) throw new Error(tokenData.error);
     const clientSecret = tokenData.clientSecret;
 
-    micStream = await navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation: true, noiseSuppression: true }
-    });
+    // Separated from the SDP negotiation below on purpose: a mic-permission
+    // failure and an OpenAI-side rate limit are two completely different
+    // problems with two completely different fixes, but they used to share
+    // one generic error message ("check mic permissions") that was actively
+    // WRONG advice whenever the real cause was a 429 from OpenAI's servers.
+    try {
+      micStream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true }
+      });
+    } catch (micErr) {
+      document.getElementById('voice-orb').className = 'voice-orb state-paused';
+      setCallStatus('Microphone access denied or unavailable — check your browser\'s mic permission for this site and try again');
+      return;
+    }
 
     pc = new RTCPeerConnection();
 
@@ -1182,18 +1193,38 @@ async function connectRealtimeSession() {
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
 
-    const sdpRes = await fetch('https://api.openai.com/v1/realtime/calls', {
-      method: 'POST',
-      body: offer.sdp,
-      headers: { Authorization: `Bearer ${clientSecret}`, 'Content-Type': 'application/sdp' },
-    });
-    if (!sdpRes.ok) throw new Error(`Realtime connection failed (${sdpRes.status})`);
+    // RETRY ON 429: OpenAI's Realtime API rate-limits requests per org/minute.
+    // A 429 here usually means a short-lived burst (e.g. a few reps starting
+    // calls within the same few seconds) rather than a real outage, and
+    // clears within seconds — so retry a couple of times with backoff before
+    // surfacing an error, instead of failing on the very first attempt.
+    let sdpRes, lastStatus;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      sdpRes = await fetch('https://api.openai.com/v1/realtime/calls', {
+        method: 'POST',
+        body: offer.sdp,
+        headers: { Authorization: `Bearer ${clientSecret}`, 'Content-Type': 'application/sdp' },
+      });
+      if (sdpRes.ok) break;
+      lastStatus = sdpRes.status;
+      if (sdpRes.status !== 429 || attempt === 2) break;
+      const retryAfter = parseFloat(sdpRes.headers.get('retry-after'));
+      const waitMs = !isNaN(retryAfter) ? retryAfter * 1000 : (attempt + 1) * 1500;
+      setCallStatus(`Connection busy (rate limited) — retrying in ${Math.round(waitMs / 1000)}s...`);
+      await new Promise(r => setTimeout(r, waitMs));
+    }
+    if (!sdpRes.ok) {
+      if (sdpRes.status === 429) {
+        throw new Error('OpenAI rate limit hit repeatedly (429) — likely several reps starting calls at once, or the account\'s Realtime API tier is too low for current usage. Check the Limits page at platform.openai.com and consider requesting a higher tier if this keeps happening');
+      }
+      throw new Error(`Realtime connection failed (${sdpRes.status}) — this is an OpenAI server-side error, not a mic/permissions issue`);
+    }
     const answerSdp = await sdpRes.text();
     await pc.setRemoteDescription({ type: 'answer', sdp: answerSdp });
 
   } catch (err) {
     document.getElementById('voice-orb').className = 'voice-orb state-paused';
-    setCallStatus('Error connecting: ' + err.message + ' — check mic permissions and try again');
+    setCallStatus('Error connecting: ' + err.message);
   }
 }
 
