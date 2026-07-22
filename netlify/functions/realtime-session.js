@@ -119,11 +119,15 @@ exports.handler = async (event) => {
           // Hard cap on how long a single response can be — instructions
           // already ask for "a sentence or two," but this backs that up at
           // the API level instead of relying on the model to just comply.
-          // Shorter responses also generate (and speak) faster. 300 is
-          // roomy enough for 2-3 natural sentences without much risk of
-          // getting cut off mid-thought; lower it (e.g. 200) for snappier/
-          // shorter replies, or raise it if responses start feeling clipped.
-          max_output_tokens: 300,
+          // Raised 300 → 700: 300 was too tight — a persona explaining a
+          // detailed objection or asking a couple of connected questions back
+          // to back could genuinely run past it and get cut off mid-thought,
+          // independent of anything else (VAD/interruption tuning doesn't
+          // touch this at all — this is a hard stop regardless of pacing).
+          // 700 gives real headroom for a longer natural turn while still
+          // capping runaway responses; lower it back toward 400-500 if
+          // replies start feeling long-winded rather than natural.
+          max_output_tokens: 700,
         },
       }),
     });
