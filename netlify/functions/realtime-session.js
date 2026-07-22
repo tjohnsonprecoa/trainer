@@ -81,21 +81,35 @@ exports.handler = async (event) => {
               // speaking" mid-response, cutting the audio while the transcript
               // (already fully generated) kept the complete text. There was no
               // further headroom left in semantic_vad to fix that.
-              // server_vad exposes an actual loudness threshold (0.0-1.0,
-              // default 0.5) — raised here to 0.7 so a quiet echo/background
-              // noise needs real volume before it's read as the rep talking,
-              // while a rep actually speaking at normal volume still triggers
-              // normally. prefix_padding_ms/silence_duration_ms raised
-              // slightly above default too, giving a bit more buffer around
-              // both ends of a genuine turn. If reps start feeling like the
-              // persona doesn't respond fast enough to real interruptions,
-              // lower threshold back toward 0.5-0.6 first before touching
-              // the other two.
+              //
+              // ROUND 2 (after real-call testing on a paid/working account):
+              // two distinct symptoms reported, each pointing at a different
+              // dial —
+              // 1) persona's own audio STILL cutting off sometimes → threshold
+              //    wasn't high enough yet. Raised 0.7 → 0.85: needs real, clear
+              //    volume before anything is read as the rep talking, so quiet
+              //    echo/background noise has much less room to false-trigger.
+              // 2) persona jumping back in and talking over the REP before
+              //    they finished a sentence → this is silence_duration_ms, not
+              //    threshold. 500ms is enough gap for quick back-and-forth but
+              //    not for a normal mid-thought pause on a real sales call
+              //    (gathering words, thinking what to say next) — the system
+              //    was reading that pause as "rep is done" and letting the
+              //    persona jump in early. Raised 500 → 900ms so a normal pause
+              //    doesn't get mistaken for a finished turn.
+              // Trade-off of both changes: the persona will feel a bit slower
+              // to respond once the rep genuinely finishes talking, and a
+              // genuine quick interruption needs to be a bit more deliberate/
+              // louder to register. That's the right trade here — a beat of
+              // extra latency reads as natural, being cut off does not. If it
+              // ever starts feeling sluggish rather than natural, ease
+              // silence_duration_ms back down toward 700 first before
+              // touching threshold.
               turn_detection: {
                 type: 'server_vad',
-                threshold: 0.7,
+                threshold: 0.85,
                 prefix_padding_ms: 300,
-                silence_duration_ms: 500,
+                silence_duration_ms: 900,
                 interrupt_response: true,
               },
             },
