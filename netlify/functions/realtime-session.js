@@ -17,6 +17,13 @@ const { buildPersonaInstructions } = require('./persona-instructions');
 
 const OPENAI_KEY = process.env.OPENAI_KEY || process.env.OPENAI_API_KEY;
 
+// TEMP DEBUG — remove once the key issue is confirmed fixed.
+// Logs length + last 4 chars only, never the full key. Check this in
+// Netlify → Logs → Functions after a test call.
+console.log('[DEBUG] OPENAI_KEY loaded:', OPENAI_KEY
+  ? `length=${OPENAI_KEY.length} last4=${OPENAI_KEY.slice(-4)}`
+  : 'MISSING/UNDEFINED');
+
 // Legacy (proven instruction-following) voices, not the newer Cedar/Marin —
 // there's a known open issue where Cedar/Marin can ignore agent instructions,
 // which matters a lot here since each persona's behavior IS the instructions.
