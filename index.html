@@ -221,6 +221,16 @@
   .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.7); z-index: 1000; align-items: center; justify-content: center; padding: 20px; }
   .modal-box { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 28px; max-width: 640px; width: 100%; max-height: 85vh; overflow-y: auto; }
   .muted-small { font-size: 12px; color: var(--muted); }
+
+  /* Confidence Track */
+  .breathing-wrap { display: flex; justify-content: center; padding: 24px 0 8px; }
+  .breathing-circle { width: 140px; height: 140px; border-radius: 50%; background: rgba(108,99,255,.1); border: 2px solid var(--accent); display: flex; align-items: center; justify-content: center; text-align: center; font-family: 'Syne', sans-serif; font-weight: 700; font-size: 14px; color: var(--accent); transition: transform 3.8s ease-in-out; }
+  .breathing-circle.inhale { transform: scale(1.35); }
+  .breathing-circle.exhale { transform: scale(1); }
+  .drill-prompt-box { background: var(--surface2); border-radius: var(--radius); padding: 16px; font-size: 14px; line-height: 1.6; }
+  .confidence-log-entry { padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .confidence-log-entry:last-child { border-bottom: none; }
+  .confidence-log-date { color: var(--muted); font-size: 11px; margin-top: 3px; }
 </style>
 </head>
 <body>
@@ -229,6 +239,7 @@
     <div class="logo"><span>📞 FPC Training Pathway</span><span class="logo-badge">New Hire</span></div>
     <div class="header-nav">
       <button class="nav-btn active" id="nav-practice" onclick="showPage('practice', this)">Practice</button>
+      <button class="nav-btn" id="nav-confidence" onclick="showPage('confidence', this)">Confidence</button>
       <button class="nav-btn" id="nav-manager" onclick="showPage('manager', this)">Manager</button>
     </div>
   </header>
@@ -555,6 +566,79 @@
 
   </div>
 
+  <!-- ═══════════════ CONFIDENCE PAGE ═══════════════ -->
+  <!-- Non-roleplay track: breathing, vocal delivery drills, confidence log.
+       Deliberately kept separate from the objection modules — no persona,
+       no AI scoring. Reps flagged with "confidence" as a growth area (or
+       anyone who wants it) can use this before or alongside role-play practice. -->
+  <div class="page" id="page-confidence">
+
+    <div class="card">
+      <div class="card-title">Confidence Track</div>
+      <p class="muted-small">Short, low-stakes drills — no persona, no scoring. Build delivery and repetition here first; the role-play modules are still there on the Practice tab whenever you're ready to test it live.</p>
+    </div>
+
+    <div class="card" id="confidence-identity-card">
+      <div class="card-title">Who's practicing?</div>
+      <div class="row-2">
+        <div>
+          <label>Your Name</label>
+          <input type="text" id="conf-rep-name-input" placeholder="e.g. Jordan Smith">
+        </div>
+        <div>
+          <label>Team</label>
+          <select id="conf-rep-team-input">
+            <option value="">Select team...</option>
+            <option value="utah">Utah</option>
+            <option value="greatlakes">Great Lakes</option>
+            <option value="east">East</option>
+            <option value="southcentral">South Central</option>
+            <option value="anaheim">Anaheim</option>
+            <option value="west">West</option>
+            <option value="pdxtraining">PDX Training</option>
+            <option value="uttraining">UT Training</option>
+          </select>
+        </div>
+      </div>
+      <button class="btn btn-primary" onclick="confirmConfidenceIdentity()">Continue →</button>
+    </div>
+
+    <div id="confidence-body" style="display:none">
+
+      <div class="card">
+        <div class="card-title">1 · Pre-Call Breathing</div>
+        <p class="muted-small" style="margin-bottom:4px">Box breathing — 4 seconds in, 4 hold, 4 out, 4 hold. Run this once before every practice or real call.</p>
+        <div class="breathing-wrap">
+          <div class="breathing-circle" id="breathing-circle"><span id="breathing-label">Ready</span></div>
+        </div>
+        <button class="btn btn-ghost" style="margin-top:16px" onclick="toggleBreathing()" id="breathing-btn">Start</button>
+      </div>
+
+      <div class="card">
+        <div class="card-title">2 · Vocal Delivery Drill</div>
+        <p class="muted-small" style="margin-bottom:14px">Read the prompt out loud, then play it back. Focus on: a deliberate pause after your name and the funeral home name, ending statements on a down note (not a question lilt), and speaking slightly louder than feels natural.</p>
+        <div class="drill-prompt-box" id="drill-prompt-box"></div>
+        <button class="btn btn-ghost" style="margin-top:10px" onclick="shuffleDrillPrompt()">🔀 New prompt</button>
+        <div style="margin-top:16px;display:flex;gap:10px;align-items:center">
+          <button class="btn btn-ghost" style="width:auto" id="record-btn" onclick="toggleRecording()">🎙️ Record</button>
+          <audio id="recording-playback" controls style="display:none;flex:1"></audio>
+        </div>
+        <div class="error-box" id="recording-error"></div>
+        <p class="muted-small" style="margin-top:10px">Recordings stay in your browser only — nothing is uploaded or reviewed.</p>
+      </div>
+
+      <div class="card">
+        <div class="card-title">3 · Confidence Log</div>
+        <p class="muted-small" style="margin-bottom:14px">One line after each practice or real call — a small win, not a critique. Not scored, not reviewed by a manager unless you choose to share it.</p>
+        <textarea id="confidence-log-input" rows="2" placeholder="e.g. Didn't rush the open today, felt steady the whole call"></textarea>
+        <button class="btn btn-primary" onclick="submitConfidenceLog()" id="confidence-log-submit-btn">Add entry</button>
+        <div class="error-box" id="confidence-log-error"></div>
+        <div id="confidence-log-list" style="margin-top:16px"></div>
+      </div>
+
+    </div>
+  </div>
+
   <!-- ═══════════════ MANAGER PAGE ═══════════════ -->
   <div class="page" id="page-manager">
     <div class="login-wrap" id="manager-login-wrap">
@@ -768,6 +852,7 @@ function showPage(page, btn) {
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   if (btn) btn.classList.add('active');
   if (page === 'manager' && document.getElementById('manager-rep-list').style.display !== 'none') renderDashboard();
+  if (page === 'confidence') prefillConfidenceIdentity();
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -2187,6 +2272,168 @@ async function populateKnownRepNames() {
   } catch (e) { /* non-fatal — autocomplete just won't populate this session */ }
 }
 populateKnownRepNames();
+
+// ═══════════════════════════════════════════════════════════
+// CONFIDENCE TRACK — non-roleplay drills (breathing, vocal delivery,
+// confidence log). Deliberately separate from the objection modules:
+// no persona engine, no AI scoring. See the confidence-training-path
+// design doc for the full phased approach this implements a slice of.
+// ═══════════════════════════════════════════════════════════
+let confRepId = null;
+let confRepTeam = null;
+
+// If the rep already entered their name/team on the Practice tab, carry
+// it over so they don't have to type it twice.
+function prefillConfidenceIdentity() {
+  if (typeof repId !== 'undefined' && repId && repTeam && !confRepId) {
+    document.getElementById('conf-rep-name-input').value = repId;
+    document.getElementById('conf-rep-team-input').value = repTeam;
+  }
+}
+
+function confirmConfidenceIdentity() {
+  const typed = document.getElementById('conf-rep-name-input').value.trim();
+  const team = document.getElementById('conf-rep-team-input').value;
+  if (!typed) { alert('Enter your name first.'); return; }
+  if (!team) { alert('Select your team first.'); return; }
+  confRepId = typed;
+  confRepTeam = team;
+  document.getElementById('confidence-identity-card').style.display = 'none';
+  document.getElementById('confidence-body').style.display = 'block';
+  shuffleDrillPrompt();
+  loadConfidenceLog();
+}
+
+// ─── Box breathing timer (4-4-4-4, repeats until stopped) ───
+let breathingRunning = false;
+let breathingTimer = null;
+let breathingPhaseIdx = 0;
+const BREATH_PHASES = [
+  { label: 'Breathe In', cls: 'inhale' },
+  { label: 'Hold', cls: 'inhale' },
+  { label: 'Breathe Out', cls: 'exhale' },
+  { label: 'Hold', cls: 'exhale' },
+];
+
+function runBreathingPhase() {
+  const phase = BREATH_PHASES[breathingPhaseIdx % BREATH_PHASES.length];
+  document.getElementById('breathing-label').textContent = phase.label;
+  document.getElementById('breathing-circle').className = 'breathing-circle ' + phase.cls;
+  breathingPhaseIdx++;
+}
+
+function toggleBreathing() {
+  const btn = document.getElementById('breathing-btn');
+  if (breathingRunning) {
+    clearInterval(breathingTimer);
+    breathingRunning = false;
+    btn.textContent = 'Start';
+    document.getElementById('breathing-label').textContent = 'Ready';
+    document.getElementById('breathing-circle').className = 'breathing-circle';
+    return;
+  }
+  breathingRunning = true;
+  breathingPhaseIdx = 0;
+  btn.textContent = 'Stop';
+  runBreathingPhase();
+  breathingTimer = setInterval(runBreathingPhase, 4000);
+}
+
+// ─── Vocal delivery drill prompts ───
+// Mixes real call openings (so the practice is grounded in what reps
+// actually say) with generic paraphrase/value-building/appointment-ask
+// lines pulled from the same skills the scoring rubric evaluates.
+const DRILL_PROMPTS = [
+  LEAD_SOURCES.direct_mail.opening,
+  LEAD_SOURCES.internet.opening,
+  LEAD_SOURCES.veterans.opening,
+  'Explain in your own words why pre-planning protects a family from making decisions under grief.',
+  'Explain in your own words why locking in today\u2019s price matters \u2014 without using the phrase "lock in."',
+  'Say this three different ways: "What\u2019s the most important reason you\u2019re looking into this now?"',
+  'Practice the appointment ask: propose a specific day and time, and state clearly that it\u2019s about an hour.',
+  'Practice your introduction with a funeral home name and advisor name of your choosing, ending on a confident down-note, not a question lilt.',
+];
+
+function shuffleDrillPrompt() {
+  document.getElementById('drill-prompt-box').textContent = randomFrom(DRILL_PROMPTS);
+}
+
+// ─── Local-only recording (no upload, no scoring — just playback) ───
+let confMediaRecorder = null;
+let confRecordedChunks = [];
+let confIsRecording = false;
+
+async function toggleRecording() {
+  const btn = document.getElementById('record-btn');
+  const errBox = document.getElementById('recording-error');
+  errBox.style.display = 'none';
+
+  if (confIsRecording) {
+    confMediaRecorder.stop();
+    return;
+  }
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    confRecordedChunks = [];
+    confMediaRecorder = new MediaRecorder(stream);
+    confMediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) confRecordedChunks.push(e.data); };
+    confMediaRecorder.onstop = () => {
+      const blob = new Blob(confRecordedChunks, { type: 'audio/webm' });
+      const audioEl = document.getElementById('recording-playback');
+      audioEl.src = URL.createObjectURL(blob);
+      audioEl.style.display = 'block';
+      stream.getTracks().forEach(t => t.stop());
+      confIsRecording = false;
+      btn.textContent = '🎙️ Record';
+    };
+    confMediaRecorder.start();
+    confIsRecording = true;
+    btn.textContent = '⏹ Stop';
+  } catch (e) {
+    errBox.textContent = 'Could not access the microphone \u2014 check browser permissions.';
+    errBox.style.display = 'block';
+  }
+}
+
+// ─── Confidence log (Supabase-backed, per rep) ───
+async function loadConfidenceLog() {
+  const listEl = document.getElementById('confidence-log-list');
+  listEl.innerHTML = '<p class="muted-small">Loading...</p>';
+  try {
+    const { data, error } = await sb.from('confidence_log').select('*').eq('rep_id', confRepId).order('created_at', { ascending: false }).limit(20);
+    if (error) throw error;
+    if (!data || !data.length) { listEl.innerHTML = '<p class="muted-small">No entries yet \u2014 add your first one above.</p>'; return; }
+    listEl.innerHTML = data.map(e => `
+      <div class="confidence-log-entry">
+        <div>${escapeHtml(e.entry_text)}</div>
+        <div class="confidence-log-date">${new Date(e.created_at).toLocaleString()}</div>
+      </div>
+    `).join('');
+  } catch (e) {
+    listEl.innerHTML = '<p class="muted-small">Could not load past entries.</p>';
+  }
+}
+
+async function submitConfidenceLog() {
+  const input = document.getElementById('confidence-log-input');
+  const errBox = document.getElementById('confidence-log-error');
+  errBox.style.display = 'none';
+  const text = input.value.trim();
+  if (!text) return;
+  const btn = document.getElementById('confidence-log-submit-btn');
+  btn.disabled = true;
+  try {
+    await sb.from('confidence_log').insert({ rep_id: confRepId, team: confRepTeam, entry_text: text });
+    input.value = '';
+    await loadConfidenceLog();
+  } catch (e) {
+    errBox.textContent = 'Could not save \u2014 try again.';
+    errBox.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+  }
+}
 </script>
 </body>
 </html>
