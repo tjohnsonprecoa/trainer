@@ -413,10 +413,10 @@
 
       <!-- Appointment form -->
       <div id="appointment-form" style="display:none">
-        <label>Person You Talked To *</label>
+        <label>Person You Talked To</label>
         <input type="text" id="apt-person-talked-to" placeholder="e.g. the lead, their spouse...">
 
-        <label>Location *</label>
+        <label>Location</label>
         <select id="apt-location">
           <option value="">Select...</option>
           <option value="Funeral Home">Funeral Home</option>
@@ -424,7 +424,7 @@
           <option value="Other">Other</option>
         </select>
 
-        <label>Day *</label>
+        <label>Day</label>
         <select id="apt-day">
           <option value="">Select day...</option>
           <option value="Monday">Monday</option>
@@ -435,10 +435,10 @@
           <option value="Saturday">Saturday</option>
         </select>
 
-        <label>Time *</label>
+        <label>Time</label>
         <select id="apt-time"></select>
 
-        <label>Attendee Info *</label>
+        <label>Attendee Info</label>
         <div class="radio-group" id="apt-attendee-group">
           <label class="radio-option"><input type="radio" name="apt-attendee" value="Partner Attending"> Partner Attending</label>
           <label class="radio-option"><input type="radio" name="apt-attendee" value="Single"> Single</label>
@@ -454,7 +454,7 @@
           <input type="text" class="phone-part" id="apt-phone-2" readonly>
           <input type="text" class="phone-part" id="apt-phone-3" readonly>
         </div>
-        <label class="verify-check"><input type="checkbox" id="apt-phone-verified"> Verified — I confirmed this number with the lead on the call *</label>
+        <label class="verify-check"><input type="checkbox" id="apt-phone-verified"> Verified — I confirmed this number with the lead on the call</label>
 
         <label>Email (ask for it on the call, then enter it here)</label>
         <input type="text" id="apt-email" placeholder="e.g. linda52@yahoo.com">
@@ -1494,27 +1494,24 @@ async function submitAppointment() {
   const errBox = document.getElementById('apt-error');
   errBox.style.display = 'none';
 
+  // No fields are required here — reps can submit with whatever they logged,
+  // including nothing at all. Scoring judges the call based on whatever was
+  // (or wasn't) filled in, rather than blocking submission up front.
   const personTalkedTo = document.getElementById('apt-person-talked-to').value.trim();
-  const location = document.getElementById('apt-location').value;
-  const day = document.getElementById('apt-day').value;
-  const startsAt = document.getElementById('apt-time').value;
+  const location = document.getElementById('apt-location').value || null;
+  const day = document.getElementById('apt-day').value || null;
+  const startsAt = document.getElementById('apt-time').value || null;
   const attendee = document.querySelector('input[name="apt-attendee"]:checked');
   const verified = document.getElementById('apt-phone-verified').checked;
   const spouseName = document.getElementById('apt-spouse-name').value.trim();
 
-  if (!personTalkedTo) { errBox.textContent = 'Enter who you talked to.'; errBox.style.display = 'block'; return; }
-  if (!location) { errBox.textContent = 'Select a location.'; errBox.style.display = 'block'; return; }
-  if (!day) { errBox.textContent = 'Select a day.'; errBox.style.display = 'block'; return; }
-  if (!attendee) { errBox.textContent = 'Select attendee info.'; errBox.style.display = 'block'; return; }
-  if (!verified) { errBox.textContent = 'Confirm the phone number was verified.'; errBox.style.display = 'block'; return; }
-
   const formJson = {
     type: 'appointment',
-    person_talked_to: personTalkedTo,
+    person_talked_to: personTalkedTo || null,
     location,
     day,
     starts_at: startsAt,
-    attendee_info: attendee.value,
+    attendee_info: attendee ? attendee.value : null,
     spouse_name: spouseName,
     email: document.getElementById('apt-email').value.trim(),
     phone: `${document.getElementById('apt-phone-1').value}-${document.getElementById('apt-phone-2').value}-${document.getElementById('apt-phone-3').value}`,
