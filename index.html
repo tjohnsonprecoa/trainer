@@ -239,7 +239,6 @@
     <div class="logo"><span>📞 FPC Training Pathway</span><span class="logo-badge">New Hire</span></div>
     <div class="header-nav">
       <button class="nav-btn active" id="nav-practice" onclick="showPage('practice', this)">Practice</button>
-      <button class="nav-btn" id="nav-confidence" onclick="showPage('confidence', this)">Confidence</button>
       <button class="nav-btn" id="nav-manager" onclick="showPage('manager', this)">Manager</button>
     </div>
   </header>
@@ -299,6 +298,50 @@
         </div>
         <div class="recommend-arrow">→</div>
       </div>
+    </div>
+
+    <!-- Confidence Track — non-roleplay drills (breathing, vocal delivery,
+         confidence log). Deliberately separate from the objection modules:
+         no persona, no AI scoring. Shares the same rep identity captured
+         above rather than asking for it twice. -->
+    <div id="confidence-section" style="display:none">
+
+      <div class="card">
+        <div class="card-title">Confidence Track</div>
+        <p class="muted-small">Short, low-stakes drills — no persona, no scoring. Build delivery and repetition here before or alongside the role-play modules above.</p>
+      </div>
+
+      <div class="card">
+        <div class="card-title">1 · Pre-Call Breathing</div>
+        <p class="muted-small" style="margin-bottom:4px">Box breathing — 4 seconds in, 4 hold, 4 out, 4 hold. Run this once before every practice or real call.</p>
+        <div class="breathing-wrap">
+          <div class="breathing-circle" id="breathing-circle"><span id="breathing-label">Ready</span></div>
+        </div>
+        <button class="btn btn-ghost" style="margin-top:16px" onclick="toggleBreathing()" id="breathing-btn">Start</button>
+      </div>
+
+      <div class="card">
+        <div class="card-title">2 · Vocal Delivery Drill</div>
+        <p class="muted-small" style="margin-bottom:14px">Read the prompt out loud, then play it back. Focus on: a deliberate pause after your name and the funeral home name, ending statements on a down note (not a question lilt), and speaking slightly louder than feels natural.</p>
+        <div class="drill-prompt-box" id="drill-prompt-box"></div>
+        <button class="btn btn-ghost" style="margin-top:10px" onclick="shuffleDrillPrompt()">🔀 New prompt</button>
+        <div style="margin-top:16px;display:flex;gap:10px;align-items:center">
+          <button class="btn btn-ghost" style="width:auto" id="record-btn" onclick="toggleRecording()">🎙️ Record</button>
+          <audio id="recording-playback" controls style="display:none;flex:1"></audio>
+        </div>
+        <div class="error-box" id="recording-error"></div>
+        <p class="muted-small" style="margin-top:10px">Recordings stay in your browser only — nothing is uploaded or reviewed.</p>
+      </div>
+
+      <div class="card">
+        <div class="card-title">3 · Confidence Log</div>
+        <p class="muted-small" style="margin-bottom:14px">One line after each practice or real call — a small win, not a critique. Not scored, not reviewed by a manager unless you choose to share it.</p>
+        <textarea id="confidence-log-input" rows="2" placeholder="e.g. Didn't rush the open today, felt steady the whole call"></textarea>
+        <button class="btn btn-primary" onclick="submitConfidenceLog()" id="confidence-log-submit-btn">Add entry</button>
+        <div class="error-box" id="confidence-log-error"></div>
+        <div id="confidence-log-list" style="margin-top:16px"></div>
+      </div>
+
     </div>
 
     <!-- Step: pre-call briefing -->
@@ -566,79 +609,6 @@
 
   </div>
 
-  <!-- ═══════════════ CONFIDENCE PAGE ═══════════════ -->
-  <!-- Non-roleplay track: breathing, vocal delivery drills, confidence log.
-       Deliberately kept separate from the objection modules — no persona,
-       no AI scoring. Reps flagged with "confidence" as a growth area (or
-       anyone who wants it) can use this before or alongside role-play practice. -->
-  <div class="page" id="page-confidence">
-
-    <div class="card">
-      <div class="card-title">Confidence Track</div>
-      <p class="muted-small">Short, low-stakes drills — no persona, no scoring. Build delivery and repetition here first; the role-play modules are still there on the Practice tab whenever you're ready to test it live.</p>
-    </div>
-
-    <div class="card" id="confidence-identity-card">
-      <div class="card-title">Who's practicing?</div>
-      <div class="row-2">
-        <div>
-          <label>Your Name</label>
-          <input type="text" id="conf-rep-name-input" placeholder="e.g. Jordan Smith">
-        </div>
-        <div>
-          <label>Team</label>
-          <select id="conf-rep-team-input">
-            <option value="">Select team...</option>
-            <option value="utah">Utah</option>
-            <option value="greatlakes">Great Lakes</option>
-            <option value="east">East</option>
-            <option value="southcentral">South Central</option>
-            <option value="anaheim">Anaheim</option>
-            <option value="west">West</option>
-            <option value="pdxtraining">PDX Training</option>
-            <option value="uttraining">UT Training</option>
-          </select>
-        </div>
-      </div>
-      <button class="btn btn-primary" onclick="confirmConfidenceIdentity()">Continue →</button>
-    </div>
-
-    <div id="confidence-body" style="display:none">
-
-      <div class="card">
-        <div class="card-title">1 · Pre-Call Breathing</div>
-        <p class="muted-small" style="margin-bottom:4px">Box breathing — 4 seconds in, 4 hold, 4 out, 4 hold. Run this once before every practice or real call.</p>
-        <div class="breathing-wrap">
-          <div class="breathing-circle" id="breathing-circle"><span id="breathing-label">Ready</span></div>
-        </div>
-        <button class="btn btn-ghost" style="margin-top:16px" onclick="toggleBreathing()" id="breathing-btn">Start</button>
-      </div>
-
-      <div class="card">
-        <div class="card-title">2 · Vocal Delivery Drill</div>
-        <p class="muted-small" style="margin-bottom:14px">Read the prompt out loud, then play it back. Focus on: a deliberate pause after your name and the funeral home name, ending statements on a down note (not a question lilt), and speaking slightly louder than feels natural.</p>
-        <div class="drill-prompt-box" id="drill-prompt-box"></div>
-        <button class="btn btn-ghost" style="margin-top:10px" onclick="shuffleDrillPrompt()">🔀 New prompt</button>
-        <div style="margin-top:16px;display:flex;gap:10px;align-items:center">
-          <button class="btn btn-ghost" style="width:auto" id="record-btn" onclick="toggleRecording()">🎙️ Record</button>
-          <audio id="recording-playback" controls style="display:none;flex:1"></audio>
-        </div>
-        <div class="error-box" id="recording-error"></div>
-        <p class="muted-small" style="margin-top:10px">Recordings stay in your browser only — nothing is uploaded or reviewed.</p>
-      </div>
-
-      <div class="card">
-        <div class="card-title">3 · Confidence Log</div>
-        <p class="muted-small" style="margin-bottom:14px">One line after each practice or real call — a small win, not a critique. Not scored, not reviewed by a manager unless you choose to share it.</p>
-        <textarea id="confidence-log-input" rows="2" placeholder="e.g. Didn't rush the open today, felt steady the whole call"></textarea>
-        <button class="btn btn-primary" onclick="submitConfidenceLog()" id="confidence-log-submit-btn">Add entry</button>
-        <div class="error-box" id="confidence-log-error"></div>
-        <div id="confidence-log-list" style="margin-top:16px"></div>
-      </div>
-
-    </div>
-  </div>
-
   <!-- ═══════════════ MANAGER PAGE ═══════════════ -->
   <div class="page" id="page-manager">
     <div class="login-wrap" id="manager-login-wrap">
@@ -852,7 +822,6 @@ function showPage(page, btn) {
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   if (btn) btn.classList.add('active');
   if (page === 'manager' && document.getElementById('manager-rep-list').style.display !== 'none') renderDashboard();
-  if (page === 'confidence') prefillConfidenceIdentity();
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -900,6 +869,12 @@ async function loadPath() {
 
   renderFocusAreas(attemptData || []);
   renderReadinessMap();
+
+  // Confidence Track shares this same rep identity — reveal it here and
+  // initialize its drill/log state, instead of asking for name/team again.
+  document.getElementById('confidence-section').style.display = 'block';
+  shuffleDrillPrompt();
+  loadConfidenceLog();
 }
 
 // Rep-facing (not manager) summary: 3-5 things worth working on, drawn from
@@ -927,6 +902,11 @@ const DIMENSION_TIPS = {
     'Before ending the call: confirm date/time, address, phone, email, and who\u2019s attending (spouse name too, if there is one).',
     'State the appointment is about an hour — never let it sound like a quick drop-by.',
   ],
+  'Assumptive Language': [
+    'Swap "would you maybe be interested in setting something up?" for "let\u2019s get you on the calendar — does Tuesday or Thursday work better?"',
+    'Drop the qualifiers — "if you wanted to," "no pressure," "whenever" — and offer two concrete options instead.',
+    'Treat the next step as already happening; ask which time works, not whether they want a time.',
+  ],
 };
 
 function renderFocusAreas(attempts) {
@@ -941,6 +921,7 @@ function renderFocusAreas(attempts) {
     { key: 'script_adherence_score', label: 'Script Adherence' },
     { key: 'question_quality_score', label: 'Question Quality' },
     { key: 'appointment_quality_score', label: 'Appointment Quality' },
+    { key: 'assumptive_language_score', label: 'Assumptive Language' },
   ];
   const dimAverages = dims.map(d => {
     const vals = doneAttempts.map(a => a.result_json[d.key]).filter(v => v != null);
@@ -1720,6 +1701,7 @@ function redFlagBanner(r) {
   if (r.red_flag_spouse_never_asked) flags.push('Whether this was for the lead alone or included a spouse/family member never came up in the call.');
   if (r.red_flag_spouse_attendance_not_asked) flags.push('A spouse exists but whether they\u2019d attend the appointment was never established.');
   if (r.red_flag_spouse_name_not_captured) flags.push('A spouse exists but their name never came up in the conversation.');
+  if (r.red_flag_permissive_close) flags.push('Next steps were proposed with hedging, permissive language ("maybe," "if you wanted to," "no pressure") instead of a confident, assumptive ask.');
   if (!flags.length) return '';
   return `
     <div class="red-flag-banner">
@@ -1762,6 +1744,7 @@ function renderResult(r) {
         ${scoreChip('Script Adherence', r.script_adherence_score)}
         ${scoreChip('Question Quality', r.question_quality_score)}
         ${scoreChip('Appointment Quality', r.appointment_quality_score)}
+        ${scoreChip('Assumptive Language', r.assumptive_language_score)}
       </div>
     </div>
 
@@ -1945,6 +1928,7 @@ const RED_FLAG_LABELS = {
   red_flag_spouse_never_asked: 'Spouse/family member status never established',
   red_flag_spouse_attendance_not_asked: 'Spouse exists but attendance never established',
   red_flag_spouse_name_not_captured: 'Spouse exists but name never came up',
+  red_flag_permissive_close: 'Hedging/permissive language used at the close',
 };
 
 async function openInsights() {
@@ -2166,6 +2150,7 @@ async function openRepProfile(repId) {
     { key: 'script_adherence_score', label: 'Script Adherence' },
     { key: 'question_quality_score', label: 'Question Quality' },
     { key: 'appointment_quality_score', label: 'Appointment Quality' },
+    { key: 'assumptive_language_score', label: 'Assumptive Language' },
     { key: 'disposition_match_score', label: 'Call Result Accuracy' },
   ];
   const chipsHtml = dims.map(d => {
@@ -2276,33 +2261,10 @@ populateKnownRepNames();
 // ═══════════════════════════════════════════════════════════
 // CONFIDENCE TRACK — non-roleplay drills (breathing, vocal delivery,
 // confidence log). Deliberately separate from the objection modules:
-// no persona engine, no AI scoring. See the confidence-training-path
+// no persona engine, no AI scoring. Uses the same repId/repTeam captured
+// on the Practice identity card above — see the confidence-training-path
 // design doc for the full phased approach this implements a slice of.
 // ═══════════════════════════════════════════════════════════
-let confRepId = null;
-let confRepTeam = null;
-
-// If the rep already entered their name/team on the Practice tab, carry
-// it over so they don't have to type it twice.
-function prefillConfidenceIdentity() {
-  if (typeof repId !== 'undefined' && repId && repTeam && !confRepId) {
-    document.getElementById('conf-rep-name-input').value = repId;
-    document.getElementById('conf-rep-team-input').value = repTeam;
-  }
-}
-
-function confirmConfidenceIdentity() {
-  const typed = document.getElementById('conf-rep-name-input').value.trim();
-  const team = document.getElementById('conf-rep-team-input').value;
-  if (!typed) { alert('Enter your name first.'); return; }
-  if (!team) { alert('Select your team first.'); return; }
-  confRepId = typed;
-  confRepTeam = team;
-  document.getElementById('confidence-identity-card').style.display = 'none';
-  document.getElementById('confidence-body').style.display = 'block';
-  shuffleDrillPrompt();
-  loadConfidenceLog();
-}
 
 // ─── Box breathing timer (4-4-4-4, repeats until stopped) ───
 let breathingRunning = false;
@@ -2401,7 +2363,7 @@ async function loadConfidenceLog() {
   const listEl = document.getElementById('confidence-log-list');
   listEl.innerHTML = '<p class="muted-small">Loading...</p>';
   try {
-    const { data, error } = await sb.from('confidence_log').select('*').eq('rep_id', confRepId).order('created_at', { ascending: false }).limit(20);
+    const { data, error } = await sb.from('confidence_log').select('*').eq('rep_id', repId).order('created_at', { ascending: false }).limit(20);
     if (error) throw error;
     if (!data || !data.length) { listEl.innerHTML = '<p class="muted-small">No entries yet \u2014 add your first one above.</p>'; return; }
     listEl.innerHTML = data.map(e => `
@@ -2424,7 +2386,7 @@ async function submitConfidenceLog() {
   const btn = document.getElementById('confidence-log-submit-btn');
   btn.disabled = true;
   try {
-    await sb.from('confidence_log').insert({ rep_id: confRepId, team: confRepTeam, entry_text: text });
+    await sb.from('confidence_log').insert({ rep_id: repId, team: repTeam, entry_text: text });
     input.value = '';
     await loadConfidenceLog();
   } catch (e) {
